@@ -81,8 +81,47 @@ static const int atrac3PlusModuleDeps[] = {0x0300, 0};
 static const int mpegBaseModuleDeps[] = {0x0300, 0};
 static const int mp4ModuleDeps[] = {0x0300, 0};
 
+// Running the real flash0:/kd/mpeg.prx in place of our sceMpeg HLE. It needs sceVideocodec,
+// sceMpegbase and sceAudiocodec from us, all of which we implement, so the module itself is the
+// only thing that has to come from a firmware dump. Games load the AV codec module before using
+// sceMpeg, so this is where it goes.
+static SceUID g_realMpegModule = 0;
+
+static void LoadRealMpegModule() {
+	if (g_realMpegModule) {
+		return;
+	}
+	const Path path = g_Config.nandRootDirectory / "flash0" / "kd" / "mpeg.prx";
+	if (!File::Exists(path)) {
+		ERROR_LOG(Log::sceUtility, "sceMpeg HLE is disabled, but %s isn't there - the game will "
+			"get unresolved imports", path.c_str());
+		return;
+	}
+
+	std::string error;
+	SceUID id = KernelLoadModule("flash0:/kd/mpeg.prx", &error, true);
+	if (id < 0) {
+		ERROR_LOG(Log::sceUtility, "Couldn't load mpeg.prx: %s", error.c_str());
+		return;
+	}
+	if (__KernelStartModule(id, 0, 0, 0, nullptr, nullptr) < 0) {
+		ERROR_LOG(Log::sceUtility, "Couldn't start mpeg.prx");
+		return;
+	}
+	g_realMpegModule = id;
+	INFO_LOG(Log::sceUtility, "Loaded the real flash0:/kd/mpeg.prx");
+}
+
 static void NotifyLoadStatusAvcodec(int state, u32 loadAddr, u32 totalSize) {
 	JpegNotifyLoadStatus(state);
+
+	if ((DisableHLEFlags)g_Config.iDisableHLE & DisableHLEFlags::sceMpeg) {
+		if (state == 1) {
+			LoadRealMpegModule();
+		} else if (state == -1) {
+			g_realMpegModule = 0;
+		}
+	}
 }
 
 // The MP4 libraries are a good candidate for running the real thing: libmp4.prx needs only two
@@ -365,6 +404,7 @@ void __UtilityInit() {
 	SavedataParam::Init();
 	currentlyLoadedModules.clear();
 	// Vital to reset these between games, otherwise we might think they're already loaded.
+	g_realMpegModule = 0;
 	g_mp4RealModules[0] = 0;
 	g_mp4RealModules[1] = 0;
 	volatileUnlockEvent = CoreTiming::RegisterEvent("UtilityVolatileUnlock", UtilityVolatileUnlock);
