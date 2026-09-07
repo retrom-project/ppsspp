@@ -357,6 +357,9 @@
     <ClCompile Include="HLE\sceImpose.cpp">
       <Filter>HLE\Libraries</Filter>
     </ClCompile>
+    <ClCompile Include="HW\AvcDecoder.cpp">
+      <Filter>HW</Filter>
+    </ClCompile>
     <ClCompile Include="HW\MediaEngine.cpp">
       <Filter>HW</Filter>
     </ClCompile>
