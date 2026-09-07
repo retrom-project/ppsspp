@@ -116,6 +116,9 @@ static bool ReadTiledYCbCr(const u32 *buffers, int width, int height,
 	const u8 *c[4] = {};
 	const int ySize[4] = { lumaSizeLeft, lumaSizeRight, lumaSizeLeft, lumaSizeRight };
 	const int cSize[4] = { chromaSizeLeft, chromaSizeLeft, chromaSizeRight, chromaSizeRight };
+	// The descriptor is game-supplied and has been seen holding small integers rather than
+	// addresses, so check before dereferencing - the range accessors raise a memory exception
+	// rather than returning null.
 	for (int i = 0; i < 4; i++) {
 		if (ySize[i] > 0) {
 			if (!Memory::IsValidRange(buffers[i], ySize[i])) {

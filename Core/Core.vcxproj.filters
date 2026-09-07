@@ -255,6 +255,9 @@
     <ClCompile Include="HLE\sceJpeg.cpp">
       <Filter>HLE\Libraries</Filter>
     </ClCompile>
+    <ClCompile Include="HLE\sceVideocodec.cpp">
+      <Filter>HLE\Libraries</Filter>
+    </ClCompile>
     <ClCompile Include="HLE\sceMpeg.cpp">
       <Filter>HLE\Libraries</Filter>
     </ClCompile>
