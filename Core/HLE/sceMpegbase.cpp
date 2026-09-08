@@ -77,6 +77,13 @@ static u32 sceMpegBasePESpacketCopy(u32 p)
 		const u8 *src = Memory::GetTypedPointerRange<u8>(lli->pSrc, lli->iSize);
 		if (src && lli->iSize > 0) {
 			gathered.insert(gathered.end(), src, src + lli->iSize);
+			// Audio payloads land in main memory, and mpeg.prx hands that same address to
+			// sceAudiocodecDecode as its input - so for those the copy has to really happen.
+			// Video goes to a Media Engine address that isn't mapped for us; the gather above
+			// is what stands in for it there.
+			if (Memory::IsValidRange(lli->pDst, lli->iSize)) {
+				Memory::MemcpyUnchecked(lli->pDst, src, lli->iSize);
+			}
 		}
 		++lli;
 	}
