@@ -27,6 +27,22 @@ void __VideocodecDoState(PointerWrap &p);
 
 void Register_sceVideocodec();
 
+// The state of the one open decoder, for the debugger. Unlike sceAudiocodec there is never more
+// than one - mpeg.prx opens a single context per movie.
+struct VideocodecCtxInfo {
+	u32 ctxAddr;
+	int type;
+	bool hasDecoder;
+	int frameCount;
+	u32 edramAddr;
+	u32 frameBuffers;
+	u32 frameBuffersSize;
+	int width;
+	int height;
+};
+// Returns false when no context is open.
+bool VideocodecGetCtxInfo(VideocodecCtxInfo *info);
+
 // mpeg.prx copies only the four luma buffers into the descriptor it hands sceMpegBaseCscAvc.
 // Both ends of that are ours, so the conversion can recover the other four from the allocation
 // they came from. Returns false if `firstBuffer` isn't one we handed out.

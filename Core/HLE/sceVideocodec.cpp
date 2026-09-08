@@ -81,6 +81,10 @@ enum {
 static AvcDecoder *g_avcDecoder;
 static u32 g_edramAddr;
 static int g_frameCount;
+// Only for the debugger - unlike sceAudiocodec there's a single decoder, so this is just which
+// context it belongs to.
+static u32 g_ctxAddr;
+static int g_ctxType;
 
 // The frame buffers the ME would have allocated in its own memory and reported back. mpeg.prx
 // hands us an empty descriptor and reads the addresses out of it afterwards, so they have to be
@@ -94,6 +98,8 @@ void __VideocodecInit() {
 	g_avcDecoder = nullptr;
 	g_edramAddr = 0;
 	g_frameCount = 0;
+	g_ctxAddr = 0;
+	g_ctxType = 0;
 	g_frameBuffers = 0;
 	g_frameBuffersSize = 0;
 	g_frameBufferWidth = 0;
@@ -114,12 +120,16 @@ void __VideocodecShutdown() {
 }
 
 void __VideocodecDoState(PointerWrap &p) {
-	auto s = p.Section("sceVideocodec", 0, 1);
+	auto s = p.Section("sceVideocodec", 0, 2);
 	if (!s) {
 		return;
 	}
 	Do(p, g_edramAddr);
 	Do(p, g_frameCount);
+	if (s >= 2) {
+		Do(p, g_ctxAddr);
+		Do(p, g_ctxType);
+	}
 	// The decoder itself isn't serializable - a savestate resumes with a fresh one, which costs
 	// at most the frames up to the next keyframe.
 	if (p.mode == p.MODE_READ) {
@@ -182,6 +192,22 @@ static bool PublishFrameBuffers(u32 structAddr, int width, int height, u32 buffe
 	for (int i = 0; i < 8; i++) {
 		Memory::WriteUnchecked_U32(buffers[i], structAddr + 16 + i * 4);
 	}
+	return true;
+}
+
+bool VideocodecGetCtxInfo(VideocodecCtxInfo *info) {
+	if (!g_ctxAddr) {
+		return false;
+	}
+	info->ctxAddr = g_ctxAddr;
+	info->type = g_ctxType;
+	info->hasDecoder = g_avcDecoder != nullptr;
+	info->frameCount = g_frameCount;
+	info->edramAddr = g_edramAddr;
+	info->frameBuffers = g_frameBuffers;
+	info->frameBuffersSize = g_frameBuffersSize;
+	info->width = g_frameBufferWidth;
+	info->height = g_frameBufferHeight;
 	return true;
 }
 
@@ -283,6 +309,8 @@ static int sceVideocodecOpen(u32 ctxAddr, int type) {
 	if (!AvcDecoder::IsAvailable()) {
 		return hleLogError(Log::ME, -1, "built without ffmpeg, can't decode video");
 	}
+	g_ctxAddr = ctxAddr;
+	g_ctxType = type;
 	return hleLogInfo(Log::ME, 0, "type %d", type);
 }
 
@@ -294,6 +322,8 @@ static int sceVideocodecInit(u32 ctxAddr, int type) {
 	delete g_avcDecoder;
 	g_avcDecoder = new AvcDecoder();
 	g_frameCount = 0;
+	g_ctxAddr = ctxAddr;
+	g_ctxType = type;
 	return hleLogInfo(Log::ME, 0, "type %d", type);
 }
 
@@ -437,6 +467,8 @@ static int sceVideocodecStop(u32 ctxAddr, int type) {
 static int sceVideocodecDelete(u32 ctxAddr, int type) {
 	delete g_avcDecoder;
 	g_avcDecoder = nullptr;
+	g_ctxAddr = 0;
+	g_ctxType = 0;
 	return hleLogInfo(Log::ME, 0);
 }
 

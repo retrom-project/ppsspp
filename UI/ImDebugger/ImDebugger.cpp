@@ -47,6 +47,7 @@
 #include "Core/HLE/sceAtrac.h"
 #include "Core/HLE/sceAudio.h"
 #include "Core/HLE/sceAudiocodec.h"
+#include "Core/HLE/sceVideocodec.h"
 #include "Core/HLE/sceMp3.h"
 #include "Core/HLE/AtracCtx.h"
 #include "Core/HLE/sceSas.h"
@@ -1574,6 +1575,33 @@ void DrawMediaDecodersView(ImConfig &cfg, ImControl &control) {
 				}
 			}
 			ImGui::EndTable();
+		}
+	}
+
+	VideocodecCtxInfo videoCtx;
+	const bool hasVideoCtx = VideocodecGetCtxInfo(&videoCtx);
+	if (ImGui::CollapsingHeaderWithCount("sceVideocodec", hasVideoCtx ? 1 : 0, ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (hasVideoCtx) {
+			if (ImGui::BeginTable("videocodecs", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersH)) {
+				ImGui::TableSetupColumn("CtxAddr", ImGuiTableColumnFlags_WidthFixed);
+				ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed);
+				ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed);
+				ImGui::TableSetupColumn("Frames", ImGuiTableColumnFlags_WidthFixed);
+				ImGui::TableHeadersRow();
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGui::Text("%08x", videoCtx.ctxAddr);
+				ImGui::TableNextColumn();
+				ImGui::Text("H.264 (%d)", videoCtx.type);
+				ImGui::TableNextColumn();
+				ImGui::Text("%dx%d", videoCtx.width, videoCtx.height);
+				ImGui::TableNextColumn();
+				ImGui::Text("%d", videoCtx.frameCount);
+				ImGui::EndTable();
+			}
+			ImGui::Text("Decoder: %s", videoCtx.hasDecoder ? "open" : "not initialized");
+			ImGui::Text("EDRAM: %08x", videoCtx.edramAddr);
+			ImGui::Text("Frame buffers: %08x (%d bytes)", videoCtx.frameBuffers, videoCtx.frameBuffersSize);
 		}
 	}
 
