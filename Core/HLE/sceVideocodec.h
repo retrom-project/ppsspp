@@ -26,3 +26,8 @@ void __VideocodecShutdown();
 void __VideocodecDoState(PointerWrap &p);
 
 void Register_sceVideocodec();
+
+// mpeg.prx copies only the four luma buffers into the descriptor it hands sceMpegBaseCscAvc.
+// Both ends of that are ours, so the conversion can recover the other four from the allocation
+// they came from. Returns false if `firstBuffer` isn't one we handed out.
+bool VideocodecGetFrameBuffers(u32 firstBuffer, u32 buffers[8]);
