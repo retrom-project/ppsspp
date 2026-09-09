@@ -30,6 +30,7 @@
 
 #include "Common/Serialize/Serializer.h"
 #include "Common/Serialize/SerializeFuncs.h"
+#include "Core/HLE/ErrorCodes.h"
 #include "Core/HLE/HLE.h"
 #include "Core/HLE/FunctionWrappers.h"
 #include "Core/HLE/sceVideocodec.h"
@@ -78,70 +79,113 @@ enum {
 	OUT_WIDTH_CB = 104,
 };
 
-static AvcDecoder *g_avcDecoder;
-static u32 g_edramAddr;
-static int g_frameCount;
-// Only for the debugger - unlike sceAudiocodec there's a single decoder, so this is just which
-// context it belongs to.
-static u32 g_ctxAddr;
-static int g_ctxType;
+// A game can have more than one of these open at once - Silent Hill Origins runs two, one that
+// owns the EDRAM and one that does the decoding - so everything here is per context. The EDRAM
+// itself isn't in here: hardware keeps that in the context struct (raw pointer at CTX_EDRAM_RAW,
+// 64-byte-aligned at CTX_EDRAM) and nowhere else, so we do the same and this only holds what has
+// to live on our side.
+struct VideocodecCtx {
+	AvcDecoder *decoder = nullptr;
+	int type = 0;
+	int frameCount = 0;
+	// The frame buffers the ME would have allocated in its own memory and reported back. mpeg.prx
+	// hands us an empty descriptor and reads the addresses out of it afterwards, so they have to
+	// be ours - see PublishFrameBuffers.
+	u32 frameBuffers = 0;
+	u32 frameBuffersSize = 0;
+	int frameBufferWidth = 0;
+	int frameBufferHeight = 0;
+};
 
-// The frame buffers the ME would have allocated in its own memory and reported back. mpeg.prx
-// hands us an empty descriptor and reads the addresses out of it afterwards, so they have to be
-// ours - see PublishFrameBuffers.
-static u32 g_frameBuffers;
-static u32 g_frameBuffersSize;
-static int g_frameBufferWidth;
-static int g_frameBufferHeight;
+static std::map<u32, VideocodecCtx> g_videocodecCtxs;
+
+static void FreeContext(VideocodecCtx &ctx) {
+	delete ctx.decoder;
+	ctx.decoder = nullptr;
+	if (ctx.frameBuffers) {
+		kernelMemory.Free(ctx.frameBuffers);
+		ctx.frameBuffers = 0;
+	}
+}
+
+static void ClearContexts() {
+	for (auto &[addr, ctx] : g_videocodecCtxs) {
+		FreeContext(ctx);
+	}
+	g_videocodecCtxs.clear();
+}
 
 void __VideocodecInit() {
-	g_avcDecoder = nullptr;
-	g_edramAddr = 0;
-	g_frameCount = 0;
-	g_ctxAddr = 0;
-	g_ctxType = 0;
-	g_frameBuffers = 0;
-	g_frameBuffersSize = 0;
-	g_frameBufferWidth = 0;
-	g_frameBufferHeight = 0;
+	g_videocodecCtxs.clear();
 }
 
 void __VideocodecShutdown() {
-	delete g_avcDecoder;
-	g_avcDecoder = nullptr;
-	if (g_edramAddr) {
-		userMemory.Free(g_edramAddr);
-		g_edramAddr = 0;
-	}
-	if (g_frameBuffers) {
-		kernelMemory.Free(g_frameBuffers);
-		g_frameBuffers = 0;
-	}
+	ClearContexts();
 }
 
 void __VideocodecDoState(PointerWrap &p) {
-	auto s = p.Section("sceVideocodec", 0, 2);
+	auto s = p.Section("sceVideocodec", 0, 3);
 	if (!s) {
 		return;
 	}
-	Do(p, g_edramAddr);
-	Do(p, g_frameCount);
-	if (s >= 2) {
-		Do(p, g_ctxAddr);
-		Do(p, g_ctxType);
+
+	if (s < 3) {
+		// One global context's worth of state, from before this was per-context. The EDRAM address
+		// among it is now read from the context struct instead, and the rest is rebuilt on demand,
+		// so read it to keep the stream in step and drop it.
+		u32 oldEdram = 0;
+		int oldFrameCount = 0;
+		Do(p, oldEdram);
+		Do(p, oldFrameCount);
+		if (s >= 2) {
+			u32 oldCtxAddr = 0;
+			int oldCtxType = 0;
+			Do(p, oldCtxAddr);
+			Do(p, oldCtxType);
+		}
+		if (p.mode == p.MODE_READ) {
+			ClearContexts();
+		}
+		return;
 	}
-	// The decoder itself isn't serializable - a savestate resumes with a fresh one, which costs
-	// at most the frames up to the next keyframe.
+
+	// The decoders themselves aren't serializable - a savestate resumes with fresh ones, which
+	// costs at most the frames up to the next keyframe. The frame buffer allocations do have to
+	// come back, or we'd lose track of memory the restored allocator still has handed out.
+	int count = (int)g_videocodecCtxs.size();
+	Do(p, count);
 	if (p.mode == p.MODE_READ) {
-		delete g_avcDecoder;
-		g_avcDecoder = nullptr;
+		ClearContexts();
+		for (int i = 0; i < count; i++) {
+			u32 addr = 0;
+			VideocodecCtx ctx;
+			Do(p, addr);
+			Do(p, ctx.type);
+			Do(p, ctx.frameCount);
+			Do(p, ctx.frameBuffers);
+			Do(p, ctx.frameBuffersSize);
+			Do(p, ctx.frameBufferWidth);
+			Do(p, ctx.frameBufferHeight);
+			g_videocodecCtxs[addr] = ctx;
+		}
+	} else {
+		for (auto &[addr, ctx] : g_videocodecCtxs) {
+			u32 a = addr;
+			Do(p, a);
+			Do(p, ctx.type);
+			Do(p, ctx.frameCount);
+			Do(p, ctx.frameBuffers);
+			Do(p, ctx.frameBuffersSize);
+			Do(p, ctx.frameBufferWidth);
+			Do(p, ctx.frameBufferHeight);
+		}
 	}
 }
 
 // The descriptor mpeg.prx passes in is empty: on hardware the ME owns the frame buffers, and
 // reports where it put them. So allocate them here and fill the descriptor in the shape
 // sceMpegBaseCscAvc expects - dimensions in macroblocks, then the eight buffer addresses.
-static bool PublishFrameBuffers(u32 structAddr, int width, int height, u32 buffers[8]) {
+static bool PublishFrameBuffers(VideocodecCtx &vctx, u32 structAddr, int width, int height, u32 buffers[8]) {
 	const int lumaLeft = ((width + 16) >> 5) * (height >> 1) * 16;
 	const int lumaRight = (width >> 5) * (height >> 1) * 16;
 	const int sizes[8] = {
@@ -157,28 +201,28 @@ static bool PublishFrameBuffers(u32 structAddr, int width, int height, u32 buffe
 		return false;
 	}
 
-	if (g_frameBuffers && (width != g_frameBufferWidth || height != g_frameBufferHeight)) {
-		kernelMemory.Free(g_frameBuffers);
-		g_frameBuffers = 0;
+	if (vctx.frameBuffers && (width != vctx.frameBufferWidth || height != vctx.frameBufferHeight)) {
+		kernelMemory.Free(vctx.frameBuffers);
+		vctx.frameBuffers = 0;
 	}
-	if (!g_frameBuffers) {
+	if (!vctx.frameBuffers) {
 		// These live in the ME's own memory on hardware, so taking them from the game's user
 		// heap would be wrong even if it fit - Death Jr. has no 191KB to spare there.
 		u32 size = total;
-		g_frameBuffers = kernelMemory.Alloc(size, false, "VideocodecFrame");
-		if (g_frameBuffers == (u32)-1) {
-			g_frameBuffers = 0;
+		vctx.frameBuffers = kernelMemory.Alloc(size, false, "VideocodecFrame");
+		if (vctx.frameBuffers == (u32)-1) {
+			vctx.frameBuffers = 0;
 			ERROR_LOG(Log::ME, "sceVideocodec: couldn't allocate %d bytes of frame buffers", total);
 			return false;
 		}
-		g_frameBuffersSize = total;
-		g_frameBufferWidth = width;
-		g_frameBufferHeight = height;
+		vctx.frameBuffersSize = total;
+		vctx.frameBufferWidth = width;
+		vctx.frameBufferHeight = height;
 		INFO_LOG(Log::ME, "sceVideocodec: %d bytes of frame buffers at %08x for %dx%d",
-			total, g_frameBuffers, width, height);
+			total, vctx.frameBuffers, width, height);
 	}
 
-	u32 addr = g_frameBuffers;
+	u32 addr = vctx.frameBuffers;
 	for (int i = 0; i < 8; i++) {
 		buffers[i] = addr;
 		addr += (sizes[i] + 63) & ~63;
@@ -195,34 +239,44 @@ static bool PublishFrameBuffers(u32 structAddr, int width, int height, u32 buffe
 	return true;
 }
 
-bool VideocodecGetCtxInfo(VideocodecCtxInfo *info) {
-	if (!g_ctxAddr) {
-		return false;
+void VideocodecGetCtxInfo(std::vector<VideocodecCtxInfo> *infos) {
+	infos->clear();
+	for (const auto &[addr, ctx] : g_videocodecCtxs) {
+		VideocodecCtxInfo info;
+		info.ctxAddr = addr;
+		info.type = ctx.type;
+		info.hasDecoder = ctx.decoder != nullptr;
+		info.frameCount = ctx.frameCount;
+		// Hardware keeps this in the context struct, so that's where we read it back from too.
+		info.edramAddr = Memory::IsValidRange(addr, 96) ? Memory::ReadUnchecked_U32(addr + CTX_EDRAM_RAW) : 0;
+		info.frameBuffers = ctx.frameBuffers;
+		info.frameBuffersSize = ctx.frameBuffersSize;
+		info.width = ctx.frameBufferWidth;
+		info.height = ctx.frameBufferHeight;
+		infos->push_back(info);
 	}
-	info->ctxAddr = g_ctxAddr;
-	info->type = g_ctxType;
-	info->hasDecoder = g_avcDecoder != nullptr;
-	info->frameCount = g_frameCount;
-	info->edramAddr = g_edramAddr;
-	info->frameBuffers = g_frameBuffers;
-	info->frameBuffersSize = g_frameBuffersSize;
-	info->width = g_frameBufferWidth;
-	info->height = g_frameBufferHeight;
-	return true;
 }
 
 bool VideocodecGetFrameBuffers(u32 firstBuffer, u32 buffers[8]) {
-	if (!g_frameBuffers || firstBuffer != g_frameBuffers) {
+	// sceMpegbase only has the first of the eight addresses, so find whose allocation it is.
+	const VideocodecCtx *found = nullptr;
+	for (const auto &[addr, ctx] : g_videocodecCtxs) {
+		if (ctx.frameBuffers && ctx.frameBuffers == firstBuffer) {
+			found = &ctx;
+			break;
+		}
+	}
+	if (!found) {
 		return false;
 	}
-	const int width = g_frameBufferWidth, height = g_frameBufferHeight;
+	const int width = found->frameBufferWidth, height = found->frameBufferHeight;
 	const int lumaLeft = ((width + 16) >> 5) * (height >> 1) * 16;
 	const int lumaRight = (width >> 5) * (height >> 1) * 16;
 	const int sizes[8] = {
 		lumaLeft, lumaRight, lumaLeft, lumaRight,
 		lumaLeft >> 1, lumaLeft >> 1, lumaRight >> 1, lumaRight >> 1,
 	};
-	u32 addr = g_frameBuffers;
+	u32 addr = found->frameBuffers;
 	for (int i = 0; i < 8; i++) {
 		buffers[i] = addr;
 		addr += (sizes[i] + 63) & ~63;
@@ -309,8 +363,7 @@ static int sceVideocodecOpen(u32 ctxAddr, int type) {
 	if (!AvcDecoder::IsAvailable()) {
 		return hleLogError(Log::ME, -1, "built without ffmpeg, can't decode video");
 	}
-	g_ctxAddr = ctxAddr;
-	g_ctxType = type;
+	g_videocodecCtxs[ctxAddr].type = type;
 	return hleLogInfo(Log::ME, 0, "type %d", type);
 }
 
@@ -319,11 +372,11 @@ static int sceVideocodecInit(u32 ctxAddr, int type) {
 		return hleLogError(Log::ME, -1, "bad context pointer");
 	}
 	Memory::WriteUnchecked_U32(Memory::ReadUnchecked_U32(ctxAddr + CTX_EDRAM) + 8, ctxAddr + CTX_MEM);
-	delete g_avcDecoder;
-	g_avcDecoder = new AvcDecoder();
-	g_frameCount = 0;
-	g_ctxAddr = ctxAddr;
-	g_ctxType = type;
+	VideocodecCtx &vctx = g_videocodecCtxs[ctxAddr];
+	delete vctx.decoder;
+	vctx.decoder = new AvcDecoder();
+	vctx.frameCount = 0;
+	vctx.type = type;
 	return hleLogInfo(Log::ME, 0, "type %d", type);
 }
 
@@ -333,31 +386,34 @@ static int sceVideocodecGetEDRAM(u32 ctxAddr, int type) {
 	if (!Memory::IsValidRange(ctxAddr, 96)) {
 		return hleLogError(Log::ME, -1, "bad context pointer");
 	}
-	u32 size = (Memory::ReadUnchecked_U32(ctxAddr + CTX_EDRAM_SIZE) + 63) | 0x3F;
-	if (g_edramAddr) {
-		userMemory.Free(g_edramAddr);
-		g_edramAddr = 0;
+	// The firmware refuses rather than replacing one it already handed out, and a game that asks
+	// twice would otherwise leave the first allocation with nothing pointing at it.
+	if (Memory::ReadUnchecked_U32(ctxAddr + CTX_EDRAM_RAW) != 0) {
+		return hleLogError(Log::ME, SCE_MPEG_ERROR_AVC_INVALID_VALUE, "context already has EDRAM");
 	}
-	g_edramAddr = userMemory.Alloc(size, false, "VideocodecEDRAM");
-	if (g_edramAddr == (u32)-1) {
-		g_edramAddr = 0;
+	u32 size = (Memory::ReadUnchecked_U32(ctxAddr + CTX_EDRAM_SIZE) + 63) | 0x3F;
+	u32 addr = userMemory.Alloc(size, false, "VideocodecEDRAM");
+	if (addr == (u32)-1) {
 		return hleLogError(Log::ME, -1, "couldn't allocate %d bytes", size);
 	}
-	Memory::WriteUnchecked_U32((g_edramAddr + 63) & ~63, ctxAddr + CTX_EDRAM);
-	Memory::WriteUnchecked_U32(g_edramAddr, ctxAddr + CTX_EDRAM_RAW);
-	return hleLogInfo(Log::ME, 0, "%d bytes at %08x", size, g_edramAddr);
+	Memory::WriteUnchecked_U32((addr + 63) & ~63, ctxAddr + CTX_EDRAM);
+	Memory::WriteUnchecked_U32(addr, ctxAddr + CTX_EDRAM_RAW);
+	return hleLogInfo(Log::ME, 0, "%d bytes at %08x", size, addr);
 }
 
 static int sceVideocodecReleaseEDRAM(u32 ctxAddr) {
-	if (Memory::IsValidRange(ctxAddr, 96)) {
-		Memory::WriteUnchecked_U32(0, ctxAddr + CTX_EDRAM);
-		Memory::WriteUnchecked_U32(0, ctxAddr + CTX_EDRAM_RAW);
+	if (!Memory::IsValidRange(ctxAddr, 96)) {
+		return hleLogError(Log::ME, -1, "bad context pointer");
 	}
-	if (g_edramAddr) {
-		userMemory.Free(g_edramAddr);
-		g_edramAddr = 0;
+	// Which allocation to free is recorded in the context, not on our side - see GetEDRAM.
+	u32 addr = Memory::ReadUnchecked_U32(ctxAddr + CTX_EDRAM_RAW);
+	if (!addr) {
+		return hleLogError(Log::ME, SCE_MPEG_ERROR_AVC_INVALID_VALUE, "context has no EDRAM");
 	}
-	return hleLogInfo(Log::ME, 0);
+	userMemory.Free(addr);
+	Memory::WriteUnchecked_U32(0, ctxAddr + CTX_EDRAM);
+	Memory::WriteUnchecked_U32(0, ctxAddr + CTX_EDRAM_RAW);
+	return hleLogInfo(Log::ME, 0, "freed %08x", addr);
 }
 
 static int sceVideocodecDecode(u32 ctxAddr, int type) {
@@ -367,8 +423,9 @@ static int sceVideocodecDecode(u32 ctxAddr, int type) {
 	if (type != 0 && type != 1) {
 		return hleLogError(Log::ME, -1, "unknown type %d", type);
 	}
-	if (!g_avcDecoder) {
-		g_avcDecoder = new AvcDecoder();
+	VideocodecCtx &vctx = g_videocodecCtxs[ctxAddr];
+	if (!vctx.decoder) {
+		vctx.decoder = new AvcDecoder();
 	}
 
 	const u32 auAddr = Memory::ReadUnchecked_U32(ctxAddr + CTX_AU_DATA);
@@ -399,11 +456,11 @@ static int sceVideocodecDecode(u32 ctxAddr, int type) {
 		}
 	}
 	if (au && auBytes > 0) {
-		gotFrame = g_avcDecoder->Decode(au, auBytes);
+		gotFrame = vctx.decoder->Decode(au, auBytes);
 	}
 
-	const int width = gotFrame ? g_avcDecoder->Width() : 0;
-	const int height = gotFrame ? g_avcDecoder->Height() : 0;
+	const int width = gotFrame ? vctx.decoder->Width() : 0;
+	const int height = gotFrame ? vctx.decoder->Height() : 0;
 
 	auto out32 = [outAddr](int offset, u32 value) {
 		Memory::WriteUnchecked_U32(value, outAddr + offset);
@@ -428,18 +485,18 @@ static int sceVideocodecDecode(u32 ctxAddr, int type) {
 		out32(OUT_FRAME_READY, gotFrame ? 2 : 1);
 		out32(OUT_UNK64, 1);
 		out32(OUT_UNK72, (u32)-1);
-		out32(OUT_TIMESTAMP, g_frameCount * 0x64);
+		out32(OUT_TIMESTAMP, vctx.frameCount * 0x64);
 		out32(OUT_FPS, 2997);
 	}
 
 	if (gotFrame) {
-		g_frameCount++;
+		vctx.frameCount++;
 		if (type == 0) {
 			const u32 yuvStructAddr = Memory::ReadUnchecked_U32(ctxAddr + CTX_YUV_STRUCT);
 			if (Memory::IsValidRange(yuvStructAddr, 8 * 4)) {
 				u32 buffers[8];
-				if (PublishFrameBuffers(yuvStructAddr, width, height, buffers)) {
-					WriteTiledYCbCr(buffers, *g_avcDecoder, width, height);
+				if (PublishFrameBuffers(vctx, yuvStructAddr, width, height, buffers)) {
+					WriteTiledYCbCr(buffers, *vctx.decoder, width, height);
 				}
 			} else {
 				WARN_LOG(Log::ME, "sceVideocodecDecode: type 0 without a usable buffer list");
@@ -458,17 +515,19 @@ static int sceVideocodecDecode(u32 ctxAddr, int type) {
 }
 
 static int sceVideocodecStop(u32 ctxAddr, int type) {
-	if (g_avcDecoder) {
-		g_avcDecoder->Flush();
+	auto it = g_videocodecCtxs.find(ctxAddr);
+	if (it != g_videocodecCtxs.end() && it->second.decoder) {
+		it->second.decoder->Flush();
 	}
 	return hleLogInfo(Log::ME, 0);
 }
 
 static int sceVideocodecDelete(u32 ctxAddr, int type) {
-	delete g_avcDecoder;
-	g_avcDecoder = nullptr;
-	g_ctxAddr = 0;
-	g_ctxType = 0;
+	auto it = g_videocodecCtxs.find(ctxAddr);
+	if (it != g_videocodecCtxs.end()) {
+		FreeContext(it->second);
+		g_videocodecCtxs.erase(it);
+	}
 	return hleLogInfo(Log::ME, 0);
 }
 

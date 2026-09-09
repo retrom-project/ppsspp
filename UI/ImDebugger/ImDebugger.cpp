@@ -1578,30 +1578,36 @@ void DrawMediaDecodersView(ImConfig &cfg, ImControl &control) {
 		}
 	}
 
-	VideocodecCtxInfo videoCtx;
-	const bool hasVideoCtx = VideocodecGetCtxInfo(&videoCtx);
-	if (ImGui::CollapsingHeaderWithCount("sceVideocodec", hasVideoCtx ? 1 : 0, ImGuiTreeNodeFlags_DefaultOpen)) {
-		if (hasVideoCtx) {
-			if (ImGui::BeginTable("videocodecs", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersH)) {
-				ImGui::TableSetupColumn("CtxAddr", ImGuiTableColumnFlags_WidthFixed);
-				ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed);
-				ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed);
-				ImGui::TableSetupColumn("Frames", ImGuiTableColumnFlags_WidthFixed);
-				ImGui::TableHeadersRow();
+	std::vector<VideocodecCtxInfo> videoCtxs;
+	VideocodecGetCtxInfo(&videoCtxs);
+	if (ImGui::CollapsingHeaderWithCount("sceVideocodec", (int)videoCtxs.size(), ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (ImGui::BeginTable("videocodecs", 7, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersH)) {
+			ImGui::TableSetupColumn("CtxAddr", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn("Frames", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn("Decoder", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn("EDRAM", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn("Frame buffers", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableHeadersRow();
+			for (const VideocodecCtxInfo &ctx : videoCtxs) {
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
-				ImGui::Text("%08x", videoCtx.ctxAddr);
+				ImGui::Text("%08x", ctx.ctxAddr);
 				ImGui::TableNextColumn();
-				ImGui::Text("H.264 (%d)", videoCtx.type);
+				ImGui::Text("H.264 (%d)", ctx.type);
 				ImGui::TableNextColumn();
-				ImGui::Text("%dx%d", videoCtx.width, videoCtx.height);
+				ImGui::Text("%dx%d", ctx.width, ctx.height);
 				ImGui::TableNextColumn();
-				ImGui::Text("%d", videoCtx.frameCount);
-				ImGui::EndTable();
+				ImGui::Text("%d", ctx.frameCount);
+				ImGui::TableNextColumn();
+				ImGui::TextUnformatted(ctx.hasDecoder ? "open" : "-");
+				ImGui::TableNextColumn();
+				ImGui::Text("%08x", ctx.edramAddr);
+				ImGui::TableNextColumn();
+				ImGui::Text("%08x (%d)", ctx.frameBuffers, ctx.frameBuffersSize);
 			}
-			ImGui::Text("Decoder: %s", videoCtx.hasDecoder ? "open" : "not initialized");
-			ImGui::Text("EDRAM: %08x", videoCtx.edramAddr);
-			ImGui::Text("Frame buffers: %08x (%d bytes)", videoCtx.frameBuffers, videoCtx.frameBuffersSize);
+			ImGui::EndTable();
 		}
 	}
 

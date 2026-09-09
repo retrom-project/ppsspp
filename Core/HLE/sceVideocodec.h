@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "Common/CommonTypes.h"
 
 class PointerWrap;
@@ -27,8 +29,8 @@ void __VideocodecDoState(PointerWrap &p);
 
 void Register_sceVideocodec();
 
-// The state of the one open decoder, for the debugger. Unlike sceAudiocodec there is never more
-// than one - mpeg.prx opens a single context per movie.
+// The state of each open decoder, for the debugger. A game can have several - Silent Hill Origins
+// runs one context for the EDRAM and another for the decoding.
 struct VideocodecCtxInfo {
 	u32 ctxAddr;
 	int type;
@@ -40,8 +42,7 @@ struct VideocodecCtxInfo {
 	int width;
 	int height;
 };
-// Returns false when no context is open.
-bool VideocodecGetCtxInfo(VideocodecCtxInfo *info);
+void VideocodecGetCtxInfo(std::vector<VideocodecCtxInfo> *infos);
 
 // mpeg.prx copies only the four luma buffers into the descriptor it hands sceMpegBaseCscAvc.
 // Both ends of that are ours, so the conversion can recover the other four from the allocation
