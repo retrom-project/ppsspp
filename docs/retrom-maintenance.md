@@ -48,6 +48,9 @@ browser artifacts stay below ignored `.retrom-build/`. The pinned npm lock insta
 there to bundle the host, emulation worker and I/O worker into three ESM entry points; internal
 source modules are not additional release assets. The resulting manifest remains within the
 Provider's existing bounded asset contract.
+Native resources are staged separately before preloading. The unused desktop debugger website
+and Git metadata are excluded, so recursively initialized submodules cannot enlarge the browser
+resource package or embed repository pointer files. Staging is rebuilt from scratch each time.
 
 ```sh
 python3 -B -m unittest discover -s .github/rpg-runtime -p 'test_*.py'

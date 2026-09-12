@@ -22,6 +22,7 @@ emmake make -C libretro platform=emscripten \
   OBJECT_DIR=../.retrom-build/web/objects GIT_VERSION_SRC=../.retrom-build/web/git-version.cpp GIT_VERSION="${RETROM_CORE_VERSION:?}" \
   FFMPEGINCFLAGS="-I$root/.retrom-build/ffmpeg/install/include" -j6
 cp libretro/ppsspp_libretro_emscripten.bc .retrom-build/web/ppsspp_libretro.a
+python3 .github/rpg-runtime/runtime_assets.py
 em++ libretro/retrom/frontend.cpp .retrom-build/web/ppsspp_libretro.a \
   -I. -Ilibretro/libretro-common/include -std=c++17 -O3 -pthread -msimd128 \
   -Wl,--start-group .retrom-build/ffmpeg/install/lib/*.a -Wl,--end-group \
@@ -32,7 +33,7 @@ em++ libretro/retrom/frontend.cpp .retrom-build/web/ppsspp_libretro.a \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createPPSSPP -sENVIRONMENT=worker \
   -sEXPORTED_RUNTIME_METHODS='["FS","PThread","ccall","HEAPU8","HEAP16"]' \
   -sEXPORTED_FUNCTIONS='["_malloc","_free","_psp_start","_psp_step","_psp_pause","_psp_stop","_psp_input","_psp_state_size","_psp_save","_psp_load"]' \
-  --preload-file assets@/system/PPSSPP --no-entry -o .retrom-build/web/ppsspp.js
+  --preload-file .retrom-build/web/assets@/system/PPSSPP --no-entry -o .retrom-build/web/ppsspp.js
 
 python3 - <<'PYNOTICE'
 from pathlib import Path
