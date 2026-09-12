@@ -298,3 +298,11 @@ But generally follow the surrounding style. Braces are preferred on the same lin
 We've been inconsistent with copyright notices, but for new files, have the year at 2012, and add the "This program is free software..." as in other files.
 
 `// Copyright (c) 2012- PPSSPP Project.`
+
+## Retrom fork ownership
+
+This fork keeps `master` as an upstream fast-forward mirror. Retrom changes belong to
+`retrom/g2e6fd06ed6c7`; create `feat/*`, `fix/*`, `build/*` or `sync/upstream-*` branches from it.
+Read `retrom-fork.json` and `docs/retrom-maintenance.md` for the pinned upstream, browser ABI,
+candidate interface, quality checks and immutable release assets. Never put Retrom patches on
+`master`. The browser core is built here; retrom-runtime only consumes verified assets.

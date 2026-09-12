@@ -158,3 +158,6 @@ RAPrefs_PPSSPP.cfg
 cmake-build-*/
 
 /.vscode/
+# Retrom local toolchain outputs and investigation data.
+/.retrom-build/
+.github/rpg-runtime/__pycache__/

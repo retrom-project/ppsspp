@@ -1,0 +1,28 @@
+name: Retrom Core Quality
+on:
+  pull_request:
+    branches: [retrom/g2e6fd06ed6c7]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: python3 -B -m unittest discover -s .github/rpg-runtime -p 'test_*.py'
+      - name: Build and test pinned WebAssembly core
+        run: |
+          mkdir "$RUNNER_TEMP/ppsspp-candidate"
+          bash .github/rpg-runtime/build-candidate.sh "$RUNNER_TEMP/ppsspp-candidate"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ppsspp-core-candidate
+          path: ${{ runner.temp }}/ppsspp-candidate

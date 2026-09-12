@@ -539,7 +539,6 @@ static void check_variables(CoreParameter &coreParam)
          g_Config.iLanguage = PSP_SYSTEMPARAM_LANGUAGE_CHINESE_SIMPLIFIED;
    }
 
-#ifndef __EMSCRIPTEN__
    var.key = "ppsspp_cpu_core";
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
@@ -557,9 +556,6 @@ static void check_variables(CoreParameter &coreParam)
        // to experiment in future iOS versions or something...
        g_Config.iCpuCore = (int)CPUCore::IR_INTERPRETER;
    }
-#else
-   g_Config.iCpuCore = (int)CPUCore::INTERPRETER;
-#endif
 
    var.key = "ppsspp_fast_memory";
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -1659,6 +1655,14 @@ static void retro_input(void) {
    __CtrlSetAnalogXY(CTRL_STICK_LEFT, x_left, y_left);
    __CtrlSetAnalogXY(CTRL_STICK_RIGHT, x_right, y_right);
 }
+
+#ifdef __EMSCRIPTEN__
+// PSP_IsInited can become true on the boot thread before retro_run finishes
+// the frontend boot transition. Restoring in that window races initialization.
+extern "C" bool retro_retrom_state_ready() {
+   return !g_pendingBoot && PSP_IsInited() && gpu != nullptr;
+}
+#endif
 
 // Called every frame by retroarch.
 void retro_run(void) {
