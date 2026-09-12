@@ -14,7 +14,7 @@ class DescriptorTest(unittest.TestCase):
             output = Path(temporary) / 'output'
             root.mkdir(); output.mkdir()
             config = {'releaseAssets': ['asset.js', 'rpg-runtime-release.json'],
-                      'forkRepository': 'https://github.com/retrom-project/ppsspp', 'adapterAbi': 'ppsspp-host-v1'}
+                      'forkRepository': 'https://github.com/retrom-project/ppsspp', 'adapterAbi': 'ppsspp-host-v2'}
             (root / 'retrom-fork.json').write_text(json.dumps(config))
             (output / 'asset.js').write_text('test')
             def git(*args):

@@ -22,7 +22,9 @@ async function instance() {
     setTimeout: (fn, ms) => {if (ms === 0) setImmediate(fn); return 1;}, clearTimeout: () => {}, self: {}, postMessage: msg => messages.push(msg)});
   const source = await readFile(new URL('../ppsspp.worker.mjs', import.meta.url), 'utf8');
   const module = new vm.SourceTextModule(source, {context, initializeImportMeta: meta => {meta.url = 'http://localhost/core/';}});
-  await module.link(() => new vm.SyntheticModule(['default'], function () {this.setExport('default', async () => core);}, {context}));
+  await module.link(specifier => specifier.includes('disc') ? new vm.SyntheticModule(['mountDisc'], function () {
+    this.setExport('mountDisc', () => '/game/content.iso');
+  }, {context}) : new vm.SyntheticModule(['default'], function () {this.setExport('default', async () => core);}, {context}));
   await module.evaluate();
   async function command(type, value) {
     const id = messages.length + 1; context.self.onmessage({data: {id, type, value}});

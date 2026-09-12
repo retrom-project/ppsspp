@@ -10,6 +10,6 @@ docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp \
   emscripten/emsdk@sha256:90b757eb11fa9a0e3ce4d2d9f76d932a56018e4accc37b5a28b2783751e60eb7 \
   bash /source/.github/rpg-runtime/build-web.sh
 cp "$root"/.retrom-build/web/ppsspp.{js,wasm,data} "$output/"
-cp "$root"/libretro/retrom/ppsspp-*.mjs "$root/libretro/retrom/ppsspp.worker.mjs" "$output/"
+cp "$root"/.retrom-build/web/ppsspp-host.mjs "$root"/.retrom-build/web/ppsspp.worker.mjs "$root"/.retrom-build/web/ppsspp-io.worker.mjs "$output/"
 python3 "$root/.github/rpg-runtime/licenses.py" "$output/LICENSE"
 python3 "$root/.github/rpg-runtime/candidate_descriptor.py" finalize "$output" --core-id ppsspp

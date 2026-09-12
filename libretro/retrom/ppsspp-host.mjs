@@ -1,8 +1,9 @@
 import {installInput} from './ppsspp-input.mjs';
 import {createAudio} from './ppsspp-audio.mjs';
+import {createDiscIO} from './ppsspp-disc.mjs';
 
-export const abi = 'ppsspp-host-v1';
-export async function createPPSSPPHost({target, file, extension, restore, onFailure, signal}) {
+export const abi = 'ppsspp-host-v2';
+export async function createPPSSPPHost({target, source, restore, onFailure, signal}) {
   signal?.throwIfAborted();
   const win = target.ownerDocument.defaultView;
   const canvas = target.ownerDocument.createElement('canvas'); canvas.width = 480; canvas.height = 272; canvas.id = 'canvas'; canvas.tabIndex = 0;
@@ -35,18 +36,19 @@ export async function createPPSSPPHost({target, file, extension, restore, onFail
       pending.set(id, {resolve, reject, timer}); worker.postMessage({id, type, value}, transfers);
     });
   }
-  let input;
+  let input, disc;
   async function stop() {
     if (stopped) return;
-    input?.stop(); signal?.removeEventListener('abort', abort);
+    input?.stop(); disc?.close(); signal?.removeEventListener('abort', abort);
     const stopping = call('stop'); stopped = true;
     try {await stopping;} catch {} finally {worker.terminate(); rejectAll(new Error('PPSSPP_RUNTIME_EXITED')); canvas.remove(); await audio.stop();}
   }
   const abort = () => {void stop();};
   try {
     signal?.throwIfAborted(); signal?.addEventListener('abort', abort, {once: true});
+    disc = createDiscIO(win, source, fatal);
     const surface = canvas.transferControlToOffscreen();
-    await call('start', {canvas: surface, file, extension, restore}, [surface]);
+    await call('start', {canvas: surface, source, buffer: disc.buffer, port: disc.port, restore}, [surface, disc.port]);
     signal?.throwIfAborted();
     input = installInput(win, value => {if (!stopped) worker.postMessage({id: -1, type: 'input', value});});
     canvas.focus();

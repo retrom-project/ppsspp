@@ -7,7 +7,9 @@ async function host(createAudio, Worker) {
   const context = vm.createContext({URL});
   const source = await readFile(new URL('../ppsspp-host.mjs', import.meta.url), 'utf8');
   const module = new vm.SourceTextModule(source, {context, initializeImportMeta: meta => {meta.url = 'https://core.test/ppsspp-host.mjs';}});
-  await module.link(specifier => new vm.SyntheticModule([specifier.includes('input') ? 'installInput' : 'createAudio'], function () {
+  await module.link(specifier => specifier.includes('disc') ? new vm.SyntheticModule(['createDiscIO'], function () {
+    this.setExport('createDiscIO', () => {throw Error('Unexpected disc initialization');});
+  }, {context}) : new vm.SyntheticModule([specifier.includes('input') ? 'installInput' : 'createAudio'], function () {
     this.setExport(specifier.includes('input') ? 'installInput' : 'createAudio', specifier.includes('input') ? () => ({}) : createAudio);
   }, {context}));
   await module.evaluate();

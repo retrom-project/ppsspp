@@ -1,0 +1,8 @@
+{
+  "name": "retrom-ppsspp-browser-build",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "esbuild": "0.27.0"
+  }
+}

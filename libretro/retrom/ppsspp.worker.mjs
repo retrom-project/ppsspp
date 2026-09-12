@@ -1,4 +1,5 @@
 import createPPSSPP from './ppsspp.js';
+import {mountDisc} from './ppsspp-disc.mjs';
 
 let core, canvas, timer, paused = true, ready = false, frames = 0;
 const maximum = 256 * 1024 * 1024;
@@ -80,8 +81,7 @@ async function start(value) {
   for (const file of restored?.files ?? []) {
     core.FS.mkdirTree(file.path.slice(0, file.path.lastIndexOf('/'))); core.FS.writeFile(file.path, file.bytes);
   }
-  const path = '/game/content.' + value.extension;
-  core.FS.mount(core.WORKERFS, {blobs: [{name: 'content.' + value.extension, data: value.file}]}, '/game');
+  const path = mountDisc(core.FS, value.source, value.buffer, value.port);
   if (!core.ccall('psp_start', 'number', ['string'], [path])) throw new Error('PPSSPP_START_FAILED');
   const deadline = performance.now() + 45000;
   while (!ready) {
@@ -107,7 +107,10 @@ async function command(type, value) {
     try {return encodeState();} finally {if (!paused) timer = setTimeout(loop, 0);}
   }
   case 'screenshot': return canvas.convertToBlob({type: 'image/png'});
-  case 'stop': paused = true; stopLoop(); core._psp_stop(); core.PThread?.terminateAllThreads(); return;
+  case 'stop':
+    paused = true; stopLoop();
+    try {core._psp_stop();} finally {core.PThread?.terminateAllThreads();}
+    return;
   default: throw new Error('PPSSPP_COMMAND_INVALID');
   }
 }

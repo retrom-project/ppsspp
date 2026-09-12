@@ -30,7 +30,7 @@ em++ libretro/retrom/frontend.cpp .retrom-build/web/ppsspp_libretro.a \
   -sINITIAL_MEMORY=268435456 -sMAXIMUM_MEMORY=2147483648 -sALLOW_MEMORY_GROWTH=1 \
   -sSTACK_SIZE=8388608 -sDEFAULT_PTHREAD_STACK_SIZE=2097152 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createPPSSPP -sENVIRONMENT=worker \
-  -lworkerfs.js -sEXPORTED_RUNTIME_METHODS='["FS","WORKERFS","PThread","ccall","HEAPU8","HEAP16"]' \
+  -sEXPORTED_RUNTIME_METHODS='["FS","PThread","ccall","HEAPU8","HEAP16"]' \
   -sEXPORTED_FUNCTIONS='["_malloc","_free","_psp_start","_psp_step","_psp_pause","_psp_stop","_psp_input","_psp_state_size","_psp_save","_psp_load"]' \
   --preload-file assets@/system/PPSSPP --no-entry -o .retrom-build/web/ppsspp.js
 
@@ -41,3 +41,13 @@ assert len(paths) == 1, paths
 Path('.retrom-build/web/libpng-LICENSE').write_bytes(paths[0].read_bytes())
 Path('.retrom-build/web/emscripten-LICENSE').write_bytes(Path('/emsdk/upstream/emscripten/LICENSE').read_bytes())
 PYNOTICE
+
+mkdir -p .retrom-build/bundler
+if ! cmp -s .github/rpg-runtime/bundler/package-lock.json .retrom-build/bundler/package-lock.json || [[ ! -x .retrom-build/bundler/node_modules/.bin/esbuild ]]; then
+  cp .github/rpg-runtime/bundler/package*.json .retrom-build/bundler/
+  npm ci --prefix .retrom-build/bundler --cache .retrom-build/npm-cache --no-audit --no-fund
+fi
+.retrom-build/bundler/node_modules/.bin/esbuild \
+  libretro/retrom/ppsspp-host.mjs libretro/retrom/ppsspp.worker.mjs libretro/retrom/ppsspp-io.worker.mjs \
+  --bundle --format=esm --platform=browser --target=es2022 --external:./ppsspp.js \
+  --outdir=.retrom-build/web --out-extension:.js=.mjs

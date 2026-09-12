@@ -3,8 +3,25 @@
   "forkRepository": "https://github.com/retrom-project/ppsspp",
   "defaultBranch": "retrom/g2e6fd06ed6c7",
   "upstreamMirrorBranch": "master",
-  "upstreams": [{"role": "ppsspp", "repository": "https://github.com/hrydgard/ppsspp", "refType": "COMMIT", "ref": "2e6fd06ed6c77db467dea5fb3f67abd93457da20", "commit": "2e6fd06ed6c77db467dea5fb3f67abd93457da20"}],
+  "upstreams": [
+    {
+      "role": "ppsspp",
+      "repository": "https://github.com/hrydgard/ppsspp",
+      "refType": "COMMIT",
+      "ref": "2e6fd06ed6c77db467dea5fb3f67abd93457da20",
+      "commit": "2e6fd06ed6c77db467dea5fb3f67abd93457da20"
+    }
+  ],
   "releaseTagPattern": "^retrom-core-g2e6fd06ed6c7-r[1-9][0-9]*(-rc\\.[1-9][0-9]*)?$",
-  "adapterAbi": "ppsspp-host-v1",
-  "releaseAssets": ["LICENSE", "ppsspp.js", "ppsspp.wasm", "ppsspp.data", "ppsspp.worker.mjs", "ppsspp-host.mjs", "ppsspp-input.mjs", "ppsspp-audio.mjs", "rpg-runtime-release.json"]
+  "adapterAbi": "ppsspp-host-v2",
+  "releaseAssets": [
+    "LICENSE",
+    "ppsspp.js",
+    "ppsspp.wasm",
+    "ppsspp.data",
+    "ppsspp.worker.mjs",
+    "ppsspp-host.mjs",
+    "ppsspp-io.worker.mjs",
+    "rpg-runtime-release.json"
+  ]
 }
