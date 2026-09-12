@@ -283,7 +283,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4Mov:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			_mm_store_ps(&mips->f[inst->dest], _mm_load_ps(&mips->f[inst->src1]));
 #elif PPSSPP_ARCH(ARM_NEON)
 			vst1q_f32(&mips->f[inst->dest], vld1q_f32(&mips->f[inst->src1]));
@@ -295,7 +295,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4Add:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			_mm_store_ps(&mips->f[inst->dest], _mm_add_ps(_mm_load_ps(&mips->f[inst->src1]), _mm_load_ps(&mips->f[inst->src2])));
 #elif PPSSPP_ARCH(ARM_NEON)
 			vst1q_f32(&mips->f[inst->dest], vaddq_f32(vld1q_f32(&mips->f[inst->src1]), vld1q_f32(&mips->f[inst->src2])));
@@ -308,7 +308,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4Sub:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			_mm_store_ps(&mips->f[inst->dest], _mm_sub_ps(_mm_load_ps(&mips->f[inst->src1]), _mm_load_ps(&mips->f[inst->src2])));
 #elif PPSSPP_ARCH(ARM_NEON)
 			vst1q_f32(&mips->f[inst->dest], vsubq_f32(vld1q_f32(&mips->f[inst->src1]), vld1q_f32(&mips->f[inst->src2])));
@@ -321,7 +321,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4Mul:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			_mm_store_ps(&mips->f[inst->dest], _mm_mul_ps(_mm_load_ps(&mips->f[inst->src1]), _mm_load_ps(&mips->f[inst->src2])));
 #elif PPSSPP_ARCH(ARM_NEON)
 			vst1q_f32(&mips->f[inst->dest], vmulq_f32(vld1q_f32(&mips->f[inst->src1]), vld1q_f32(&mips->f[inst->src2])));
@@ -334,7 +334,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4Div:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			_mm_store_ps(&mips->f[inst->dest], _mm_div_ps(_mm_load_ps(&mips->f[inst->src1]), _mm_load_ps(&mips->f[inst->src2])));
 #elif PPSSPP_ARCH(ARM64_NEON)
 			vst1q_f32(&mips->f[inst->dest], vdivq_f32(vld1q_f32(&mips->f[inst->src1]), vld1q_f32(&mips->f[inst->src2])));
@@ -347,7 +347,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4Scale:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			_mm_store_ps(&mips->f[inst->dest], _mm_mul_ps(_mm_load_ps(&mips->f[inst->src1]), _mm_set1_ps(mips->f[inst->src2])));
 #elif PPSSPP_ARCH(ARM_NEON)
 			vst1q_f32(&mips->f[inst->dest], vmulq_lane_f32(vld1q_f32(&mips->f[inst->src1]), vdup_n_f32(mips->f[inst->src2]), 0));
@@ -361,7 +361,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4Neg:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			_mm_store_ps(&mips->f[inst->dest], _mm_xor_ps(_mm_load_ps(&mips->f[inst->src1]), _mm_load_ps((const float *)signBits)));
 #elif PPSSPP_ARCH(ARM_NEON)
 			vst1q_f32(&mips->f[inst->dest], vnegq_f32(vld1q_f32(&mips->f[inst->src1])));
@@ -374,7 +374,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4Abs:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			_mm_store_ps(&mips->f[inst->dest], _mm_and_ps(_mm_load_ps(&mips->f[inst->src1]), _mm_load_ps((const float *)noSignMask)));
 #elif PPSSPP_ARCH(ARM_NEON)
 			vst1q_f32(&mips->f[inst->dest], vabsq_f32(vld1q_f32(&mips->f[inst->src1])));
@@ -410,7 +410,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 		case IROp::Vec4Unpack8To32:
 		{
 			// Used in Gran Turismo
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			__m128i src = _mm_cvtsi32_si128(mips->fi[inst->src1]);
 			src = _mm_unpacklo_epi8(src, _mm_setzero_si128());
 			src = _mm_unpacklo_epi16(src, _mm_setzero_si128());
@@ -446,7 +446,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4Pack32To8:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			__m128i src = _mm_loadu_si128((__m128i *)&mips->fi[inst->src1]);
 			// Shift each 32-bit lane right by 24 bits
 			src = _mm_srli_epi32(src, 24);
@@ -484,7 +484,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 		{
 			// Used in Tekken 6, Gran Turismo
 
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			__m128i src = _mm_loadu_si128((__m128i *) & mips->fi[inst->src1]);
 			// Shift each 32-bit lane right by 24 bits. Then left by 1. This matches the rather weird behavior.
 			src = _mm_slli_epi32(_mm_srli_epi32(src, 24), 1);
@@ -521,7 +521,7 @@ u32 IRInterpret(MIPSState *mips, const IRInst *inst) {
 
 		case IROp::Vec4ClampToZero:
 		{
-#if PPSSPP_ARCH(SSE2)
+#if PPSSPP_ARCH(SSE2) && !defined(__EMSCRIPTEN__)
 			// Trickery: Expand the sign bit, and use andnot to zero negative values.
 			__m128i val = _mm_load_si128((const __m128i *)&mips->fi[inst->src1]);
 			__m128i mask = _mm_srai_epi32(val, 31);

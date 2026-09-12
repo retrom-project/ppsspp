@@ -307,6 +307,8 @@ else ifeq ($(platform), emscripten)
 	GLES = 1
 	TARGET := $(TARGET_NAME)_libretro_emscripten.bc
 	PLATCFLAGS += -msimd128 -msse3 -mssse3 -msse4.1 -pthread -D__EMSCRIPTEN__ -DNO_MMAP
+	PLATCFLAGS += -DARMIPS_USE_STD_FILESYSTEM
+	COREFLAGS += -DUSE_FFMPEG
 	PLATFORM_EXT = emscripten
 	STATIC_LINKING = 1
 
@@ -454,6 +456,14 @@ else
 endif
 
 ### Finalize ###
+ifeq ($(platform), emscripten)
+	# PPSSPP selects its portable SIMD code in ppsspp_config.h. Do not make
+	# third-party C libraries emit x86 CPUID/AVX instructions for wasm32.
+	CPUFLAGS := $(filter-out -D_M_IX86,$(CPUFLAGS))
+	COREFLAGS := $(filter-out -DHAVE_STRONG_GETAUXVAL,$(COREFLAGS))
+	SOURCES_C := $(filter-out $(EXTDIR)/cpu_features/src/hwcaps.c $(EXTDIR)/aemu_postoffice/client/sock_impl_linux.c,$(SOURCES_C))
+	SOURCES_C += $(CORE_DIR)/libretro/retrom/sock_emscripten.c
+endif
 # GLEW resolves its entry points through GLX by default, and glxewInit() returns
 # GLEW_ERROR_NO_GLX_DISPLAY on a display stack that provides no GLX, so
 # glewInit() fails and the GL backend never comes up. Wayland and GBM are both
@@ -464,6 +474,9 @@ ifeq ($(GLEW_EGL),1)
 endif
 
 OBJECTS		+= $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o) $(ASMFILES:.S=.o)
+ifneq ($(strip $(OBJECT_DIR)),)
+OBJECTS := $(patsubst $(CORE_DIR)/%,$(OBJECT_DIR)/%,$(OBJECTS))
+endif
 CXXFLAGS    += $(CPUOPTS) $(COREFLAGS) $(FFMPEGINCFLAGS) $(INCFLAGS) $(INCFLAGS_PLATFORM) $(PLATCFLAGS) $(fpic) $(PLATCFLAGS) $(CPUFLAGS) $(GLFLAGS) $(DYNAFLAGS)
 CFLAGS		+= $(CPUOPTS) $(COREFLAGS) $(FFMPEGINCFLAGS) $(INCFLAGS) $(INCFLAGS_PLATFORM) $(PLATCFLAGS) $(fpic) $(PLATCFLAGS) $(CPUFLAGS) $(GLFLAGS) $(DYNAFLAGS)
 
@@ -489,6 +502,20 @@ else
 endif
 
 all: $(TARGET)
+
+ifneq ($(strip $(OBJECT_DIR)),)
+$(OBJECT_DIR)/%.o: $(CORE_DIR)/%.S
+	@mkdir -p $(@D)
+	$(AS) $(CFLAGS) -c $(OBJOUT)$@ $<
+
+$(OBJECT_DIR)/%.o: $(CORE_DIR)/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c $(OBJOUT)$@ $<
+
+$(OBJECT_DIR)/%.o: $(CORE_DIR)/%.cpp
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -c $(OBJOUT)$@ $<
+endif
 
 %.o: %.S
 	$(AS) $(CFLAGS) -c $(OBJOUT)$@ $<

@@ -1,0 +1,47 @@
+name: Retrom Core Release
+on:
+  push:
+    tags: [retrom-core-g2e6fd06ed6c7-r*]
+permissions:
+  contents: write
+concurrency:
+  group: retrom-core-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate immutable tag and maintenance branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^retrom-core-g2e6fd06ed6c7-r[1-9][0-9]*(-rc\.[1-9][0-9]*)?$ ]]
+          remote_tag_ref="refs/retrom-release/$GITHUB_REF_NAME"
+          git fetch origin "refs/tags/$GITHUB_REF_NAME:$remote_tag_ref"
+          test "$(git cat-file -t "$remote_tag_ref")" = tag
+          test "$(git rev-list -n 1 "$remote_tag_ref")" = "$GITHUB_SHA"
+          git fetch --no-tags origin retrom/g2e6fd06ed6c7
+          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD
+          git merge-base --is-ancestor 2e6fd06ed6c77db467dea5fb3f67abd93457da20 "$GITHUB_SHA"
+      - run: python3 -B -m unittest discover -s .github/rpg-runtime -p 'test_*.py'
+      - name: Build release assets
+        run: |
+          mkdir "$RUNNER_TEMP/ppsspp-candidate"
+          bash .github/rpg-runtime/build-candidate.sh "$RUNNER_TEMP/ppsspp-candidate"
+          python3 .github/rpg-runtime/release.py --candidate "$RUNNER_TEMP/ppsspp-candidate" --output "$RUNNER_TEMP/ppsspp-release" --tag "$GITHUB_REF_NAME"
+      - name: Publish immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          flags=()
+          if [[ "$GITHUB_REF_NAME" == *-rc.* ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/ppsspp-release/"* --verify-tag --generate-notes "${flags[@]}"
