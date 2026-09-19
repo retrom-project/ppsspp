@@ -12,24 +12,18 @@ The small frontend implements libretro environment, input, audio and lifecycle c
 EmulatorJS or RetroArch frontend is loaded. WebGL2, cross-origin isolation, SharedArrayBuffer,
 OffscreenCanvas and worker modules are required. PSP networking is disabled in this integration.
 
-The host ABI is `ppsspp-host-v2`. The host receives a `SEEKABLE_BLOB` source with URL, exact size,
-SHA-256 identity and `rangeRequired: true`. A read-only virtual disc preserves the original
-`/game/content.<format>` path and native seek/read semantics without allocating a complete Blob.
-A separate I/O worker serves 256 KiB HTTP ranges through a SharedArrayBuffer mailbox. Only the
-emulation worker waits; the browser UI and network worker remain responsive. Requests have a
-15-second network deadline and the mailbox has a 16-second deadline. Exit wakes waiting reads
-and terminates both workers. No speculative full-disc download or fallback to HTTP 200 is allowed.
+The host ABI is `ppsspp-host-v3`, with `content-io-v1` and the exact runtime contract hash.
+The host accepts disc SHA-256/size metadata and a role-limited consumer port/SAB, never a game URL.
+The emulation worker imports the runtime-provided verified `sync-client.mjs` Blob URL, validates
+ABI/hash and acknowledges client readiness before native startup can succeed. The Provider owns
+all HTTP, caching, persistence and cancellation. No separate PPSSPP I/O worker is built or released.
 
-The I/O worker caches at most 32 blocks in memory, the emulation worker at most 8, plus one shared
-transfer block. Cache Storage persists individual blocks by source SHA-256, length, block size and
-index, allowing reuse across launches and URLs. Storage failures fall back to bounded network reads.
-Each cached block has a locally computed SHA-256 checked on reuse to detect cache corruption.
-Network responses must have status 206, exact Content-Range/Content-Length and the source's strong
-`"sha256-<digest>"` ETag; requests include If-Match and reject redirects. This trusts the authorized
-server's immutable content identity. It does not independently verify the original whole-disc hash
-before play: that would require a server-supplied authenticated block-hash manifest. Local block
-checksums are not such a manifest. Core executable assets retain complete hash verification in
-retrom-runtime. No whole-game LOAD_PROGRESS is emitted for unread data.
+The read-only virtual disc preserves `/game/content.<format>`, native seek/read and EOF semantics.
+Its facade splits native reads into <=256 KiB portions sharing one 15-second logical deadline;
+only the public sync client caches blocks. Native stop runs while content remains available, then
+the reader closes. Forced Provider shutdown revokes the shared slot and wakes blocked readers.
+Contract/schema/error-number files in `libretro/retrom/content-io-v1` are immutable mirrors for
+ABI checking, not a second implementation of transport or storage.
 
 `ppsspp-state-v1` contains a little-endian uint32 JSON-header length, the UTF-8 header, complete
 native state, then memory-stick files in header order. The header declares version, stateSize and
@@ -45,7 +39,7 @@ Install Docker, Node.js and Python 3 as the current user. Initialize pinned Git 
 The build script pins Emscripten 4.0.10 by image digest. It builds the pinned FFmpeg submodule with
 selected PSP codecs and no network/GPL/nonfree components. All object files, FFmpeg output and
 browser artifacts stay below ignored `.retrom-build/`. The pinned npm lock installs esbuild 0.27.0
-there to bundle the host, emulation worker and I/O worker into three ESM entry points; internal
+there to bundle the host, emulation worker into two ESM entry points; internal
 source modules are not additional release assets. The resulting manifest remains within the
 Provider's existing bounded asset contract.
 Native resources are staged separately before preloading. The unused desktop debugger website

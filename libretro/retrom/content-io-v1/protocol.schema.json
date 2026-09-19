@@ -1,0 +1,2204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:retrom:content-io:v1",
+  "description": "JSON field shape; opaque host objects and cross-field consistency require runtime validation.",
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "sizeBytes",
+        "url",
+        "purpose",
+        "transport",
+        "etagPolicy",
+        "contentLengthPolicy"
+      ],
+      "properties": {
+        "identity": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "sha256"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "FILE_SHA256"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "projectDigest",
+                "logicalPath"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "INDEX_ENTRY"
+                },
+                "projectDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "logicalPath": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                }
+              }
+            }
+          ]
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "purpose": {
+          "enum": [
+            "GAME",
+            "FIRMWARE",
+            "CORE_ASSET"
+          ]
+        },
+        "transport": {
+          "enum": [
+            "RANGE_REQUIRED",
+            "WHOLE_ALLOWED"
+          ]
+        },
+        "etagPolicy": {
+          "enum": [
+            "EXPECTED_SHA256",
+            "PIN_STRONG",
+            "NONE_FULL_SHA256",
+            "IMMUTABLE_ASSET"
+          ]
+        },
+        "contentLengthPolicy": {
+          "enum": [
+            "EXACT_IF_PRESENT",
+            "REQUIRED_EXACT"
+          ]
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "bridge",
+        "result",
+        "maxFileBytes",
+        "workspace",
+        "writes",
+        "contentLengthPolicy"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "RANGE",
+            "EAGER",
+            "ON_OPEN"
+          ]
+        },
+        "bridge": {
+          "enum": [
+            "ASYNC",
+            "SYNC_WORKER",
+            "POLLING",
+            "WASMFS",
+            "VLFS",
+            "NONE"
+          ]
+        },
+        "result": {
+          "enum": [
+            "READER",
+            "BYTES",
+            "BLOB",
+            "WORKSPACE_FILE"
+          ]
+        },
+        "maxFileBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workspace": {
+          "enum": [
+            "NONE",
+            "OPFS_REQUIRED"
+          ]
+        },
+        "writes": {
+          "enum": [
+            "DENY",
+            "SESSION_OVERLAY"
+          ]
+        },
+        "contentLengthPolicy": {
+          "enum": [
+            "EXACT_IF_PRESENT",
+            "REQUIRED_EXACT"
+          ]
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectKey",
+        "storageGeneration",
+        "sizeBytes",
+        "localSha256",
+        "assurance",
+        "pinnedEtag"
+      ],
+      "properties": {
+        "objectKey": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "storageGeneration": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "localSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "assurance": {
+          "enum": [
+            "EXPECTED_SHA256",
+            "TRUSTED_IMMUTABLE_INDEX"
+          ]
+        },
+        "pinnedEtag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "fetchPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "smallFileThresholdBytes",
+        "networkWindowBytes"
+      ],
+      "properties": {
+        "smallFileThresholdBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2097152
+        },
+        "networkWindowBytes": {
+          "type": "integer",
+          "minimum": 262144,
+          "maximum": 2097152,
+          "multipleOf": 262144
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "v",
+        "abi",
+        "contractSha256",
+        "sessionId",
+        "managementChannelId",
+        "managementPort",
+        "storageOrigin",
+        "allowedOrigins",
+        "l1BudgetBytes",
+        "l2BudgetBytes",
+        "fetchPolicy"
+      ],
+      "properties": {
+        "type": {
+          "const": "BOOT"
+        },
+        "v": {
+          "const": 1
+        },
+        "abi": {
+          "const": "content-io-v1"
+        },
+        "contractSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "managementChannelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "managementPort": {
+          "description": "Checked by the runtime host-object validator, not by JSON Schema",
+          "x-hostObject": "MessagePort"
+        },
+        "storageOrigin": {
+          "type": "string",
+          "format": "uri"
+        },
+        "allowedOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "l1BudgetBytes": {
+          "enum": [
+            0,
+            2097152
+          ]
+        },
+        "l2BudgetBytes": {
+          "enum": [
+            14680064,
+            16777216
+          ]
+        },
+        "fetchPolicy": {
+          "$ref": "#/$defs/fetchPolicy"
+        },
+        "diagnostics": {
+          "const": true
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "v",
+        "abi",
+        "contractSha256",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "backend"
+      ],
+      "properties": {
+        "type": {
+          "const": "READY"
+        },
+        "v": {
+          "const": 1
+        },
+        "abi": {
+          "const": "content-io-v1"
+        },
+        "contractSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "const": 1
+        },
+        "requestId": {
+          "const": 0
+        },
+        "backend": {
+          "enum": [
+            "OPFS",
+            "CACHE_BLOCKS",
+            "MEMORY"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "source",
+        "policy"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "OPEN"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "policy": {
+          "$ref": "#/$defs/policy"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "fileId",
+        "sizeBytes",
+        "objectKey"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "OPEN_OK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "objectKey": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "consumerChannelId",
+        "allowedFileIds",
+        "mode",
+        "port",
+        "buffer"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "NEW_CHANNEL"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "consumerChannelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "allowedFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "mode": {
+          "enum": [
+            "ASYNC",
+            "SYNC"
+          ]
+        },
+        "port": {
+          "description": "Checked by the runtime host-object validator, not by JSON Schema",
+          "x-hostObject": "MessagePort"
+        },
+        "buffer": {
+          "anyOf": [
+            {
+              "description": "Checked by the runtime host-object validator, not by JSON Schema",
+              "x-hostObject": "SharedArrayBuffer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "consumerChannelId",
+        "consumerEpoch"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "CHANNEL_OK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "consumerChannelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "consumerEpoch": {
+          "const": 1
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "fileId",
+        "jobId",
+        "result",
+        "maxBytes"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "PREPARE"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "result": {
+          "enum": [
+            "BYTES",
+            "BLOB",
+            "STREAM"
+          ]
+        },
+        "maxBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "jobId",
+        "attempt",
+        "chunkIndex",
+        "offset",
+        "bytes"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "JOB_CHUNK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt": {
+          "enum": [
+            0,
+            1
+          ]
+        },
+        "chunkIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bytes": {
+          "description": "Checked by the runtime host-object validator, not by JSON Schema",
+          "x-hostObject": "ArrayBuffer"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "jobId",
+        "attempt",
+        "chunkIndex"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "JOB_ACK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt": {
+          "enum": [
+            0,
+            1
+          ]
+        },
+        "chunkIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "jobId",
+        "attempt"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "JOB_RESTART"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt": {
+          "const": 1
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "jobId",
+        "attempt"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "JOB_RESTART_ACK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt": {
+          "const": 1
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "jobId",
+        "attempt",
+        "readyBytes",
+        "totalBytes",
+        "networkBytes"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "JOB_PROGRESS"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt": {
+          "enum": [
+            0,
+            1
+          ]
+        },
+        "readyBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "networkBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "jobId",
+        "attempt",
+        "kind",
+        "bytes",
+        "blob",
+        "receipt",
+        "leaseId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "PREPARE_OK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt": {
+          "enum": [
+            0,
+            1
+          ]
+        },
+        "kind": {
+          "enum": [
+            "BYTES",
+            "BLOB",
+            "STREAM"
+          ]
+        },
+        "bytes": {
+          "anyOf": [
+            {
+              "description": "Checked by the runtime host-object validator, not by JSON Schema",
+              "x-hostObject": "ArrayBuffer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blob": {
+          "anyOf": [
+            {
+              "description": "Checked by the runtime host-object validator, not by JSON Schema",
+              "x-hostObject": "Blob"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "$ref": "#/$defs/receipt"
+        },
+        "leaseId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "jobId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "JOB_CANCEL"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "jobId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "CANCEL_OK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "leaseId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "RELEASE_LEASE"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "leaseId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "leaseId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "RELEASE_OK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "leaseId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "fileId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "CLOSE_FILE"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "fileId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "FILE_CLOSED"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "CLOSE_SESSION"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "SESSION_CLOSED"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "codeNumber",
+        "scope"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "ERROR"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "codeNumber": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 17
+        },
+        "scope": {
+          "enum": [
+            "REQUEST",
+            "OBJECT",
+            "SESSION"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "backend"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "BACKEND_READY"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "backend": {
+          "enum": [
+            "OPFS",
+            "CACHE_BLOCKS",
+            "MEMORY"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "objectKey",
+        "codeNumber"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "OBJECT_REVOKED"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "objectKey": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "codeNumber": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 17
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "codeNumber",
+        "objectKey",
+        "operation",
+        "counts"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "DIAGNOSTIC"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "codeNumber": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 17
+        },
+        "objectKey": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation": {
+          "enum": [
+            "CACHE_PROBE",
+            "CACHE_READ",
+            "CACHE_WRITE",
+            "CACHE_GC",
+            "CACHE_DEGRADE",
+            "READ",
+            "MATERIALIZE",
+            "CLOSE",
+            "ABI"
+          ]
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "networkBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "serverSentBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "rangeRequests": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "wholeRequests": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "headRequests": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "memoryHitBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "persistentHitBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "readyBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "materializedBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "materializedBytesByBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "materializedBytesByBlob": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "materializedBytesBySink": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "cacheBytesL1": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "cacheBytesL2": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "temporaryBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "outputCreditBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "syncBufferBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "inflight": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "queued": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "waiters": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "channels": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "leases": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "wholeRestartCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "cacheDegrades": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "corruptBlocks": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "firstFrameMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "inputReadyMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "exitMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "peakCacheBytesL1": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "peakCacheBytesL2": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "peakTemporaryBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "peakOutputCreditBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "peakSyncBufferBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "peakInflight": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "peakQueued": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "peakWaiters": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "peakChannels": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "peakLeases": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "fileId",
+        "offset",
+        "length",
+        "timeoutMs"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "READ"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "multipleOf": 262144
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 15000
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "fileId",
+        "offset",
+        "length",
+        "bytes",
+        "origin"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "READ_OK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "bytes": {
+          "description": "Checked by the runtime host-object validator, not by JSON Schema",
+          "x-hostObject": "ArrayBuffer"
+        },
+        "origin": {
+          "enum": [
+            "NETWORK",
+            "MEMORY",
+            "PERSISTENT"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "codeNumber",
+        "scope"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "READ_ERROR"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "codeNumber": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 17
+        },
+        "scope": {
+          "enum": [
+            "REQUEST",
+            "OBJECT",
+            "SESSION"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "fileId",
+        "codeNumber"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "FILE_REVOKED"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "codeNumber": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 17
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "ackRequestId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "READ_ACK"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "ackRequestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "completedRequestId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "SLOT_FREE"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "completedRequestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "cancelRequestId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "CANCEL"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "const": 0
+        },
+        "cancelRequestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "CLOSE_CHANNEL"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "sessionId",
+        "channelId",
+        "epoch",
+        "requestId",
+        "codeNumber"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "CHANNEL_CLOSED"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channelId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "codeNumber": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 17
+        }
+      }
+    }
+  ]
+}

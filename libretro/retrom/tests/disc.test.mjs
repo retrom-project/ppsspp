@@ -1,29 +1,31 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {discReader, mountDisc, createDiscIO} from '../ppsspp-disc.mjs';
-import {blockSize} from '../ppsspp-range.mjs';
-
-const source = {kind: 'SEEKABLE_BLOB', rangeRequired: true, url: 'https://retrom.test/disc.iso', sha256: 'a'.repeat(64), sizeBytes: blockSize * 10 + 3};
+import {discReader, mountDisc} from '../ppsspp-disc.mjs';
+const B = 262144, source = {sha256: 'a'.repeat(64), sizeBytes: B * 10 + 3};
 function transport() {
-  const buffer = new SharedArrayBuffer(blockSize + 16), control = new Int32Array(buffer, 0, 4), calls = [];
-  const port = {postMessage(index) {
-    calls.push(index); const length = Math.min(blockSize, source.sizeBytes - index * blockSize);
-    new Uint8Array(buffer, 16).fill(index + 1); control[1] = length; control[0] = 1;
-  }};
-  return {buffer, control, port, calls};
+  const calls = []; let closed = false;
+  const reader = {readInto(position, output, timeout) {
+    if (closed) throw Error('CONTENT_IO_ABORTED');
+    calls.push({position, length: output.length, timeout});
+    for (let n = 0; n < output.length; n++) output[n] = Math.floor((position + n) / B) + 1;
+    return output.length;
+  }, close() {closed = true;}};
+  return {calls, reader};
 }
-test('synchronous random reads cross block boundaries, reuse hot blocks and handle EOF', () => {
-  const t = transport(), read = discReader(source, t.buffer, t.port), bytes = new Uint8Array(10);
-  assert.equal(read(bytes, 2, 6, blockSize - 2), 6); assert.deepEqual([...bytes], [0, 0, 1, 1, 2, 2, 2, 2, 0, 0]);
-  read(bytes, 0, 4, blockSize - 2); assert.deepEqual(t.calls, [0, 1]);
+test('[BR-03] UNIT/ppsspp-disc preserves native offset, length, EOF and read-only virtual size', () => {
+  const t = transport(), read = discReader(source, t.reader), bytes = new Uint8Array(10);
+  assert.equal(read(bytes, 2, 6, B - 2), 6); assert.deepEqual([...bytes], [0, 0, 1, 1, 2, 2, 2, 2, 0, 0]);
   assert.equal(read(bytes, 0, 10, source.sizeBytes - 2), 2); assert.equal(bytes[0], 11);
-  assert.equal(read(bytes, 0, 10, source.sizeBytes), 0);
-  assert.throws(() => read(bytes, 0, 11, 0), /BOUNDS/);
+  assert.equal(read(bytes, 0, 10, source.sizeBytes), 0); assert.throws(() => read(bytes, 0, 11, 0), /BOUNDS/);
+  t.reader.close(); assert.throws(() => read(bytes, 0, 0, source.sizeBytes), /ABORTED/);
 });
-test('a timed out or closed IO bridge cannot return stale bytes', () => {
-  const t = transport(), read = discReader(source, t.buffer, {postMessage() {}}, () => 'timed-out');
-  assert.throws(() => read(new Uint8Array(1), 0, 1, 0), /TIMEOUT/); assert.equal(t.control[2], 1);
-  assert.throws(() => read(new Uint8Array(1), 0, 1, 0), /CLOSED/);
+test('[X-30] UNIT/ppsspp-disc splits native reads larger than the public logical limit under one deadline', () => {
+  const t = transport(), big = {...source, sizeBytes: 20 * 1024 * 1024};
+  const output = new Uint8Array(17 * 1024 * 1024 + 19), read = discReader(big, t.reader);
+  assert.equal(read(output, 0, output.length, 13), output.length);
+  assert.equal(t.calls.length, Math.ceil(output.length / B));
+  for (const call of t.calls) {assert.ok(call.length <= B); assert.ok(call.timeout <= 15000);}
+  assert.equal(output.at(-1), Math.floor((13 + output.length - 1) / B) + 1);
 });
 test('virtual disc exposes full size and seeking while its backing allocation stays empty', () => {
   const t = transport(); let node;
@@ -31,17 +33,8 @@ test('virtual disc exposes full size and seeking while its backing allocation st
     assert.equal(bytes.length, 0); assert.equal(canRead, true); assert.equal(canWrite, false);
     node = {node_ops: {getattr: () => ({mode: 0o100444, size: 0})}};
   }, lookupPath: path => {assert.equal(path, '/game/content.iso'); return {node};}, ErrnoError: class extends Error {}};
-  assert.equal(mountDisc(FS, source, t.buffer, t.port), '/game/content.iso');
-  assert.equal(node.node_ops.getattr(node).size, source.sizeBytes);
+  assert.equal(mountDisc(FS, source, t.reader), '/game/content.iso'); assert.equal(node.node_ops.getattr(node).size, source.sizeBytes);
   assert.equal(node.stream_ops.llseek({position: 8}, -2, 1), 6);
   assert.equal(node.stream_ops.llseek({position: 0}, -3, 2), source.sizeBytes - 3);
-  assert.throws(() => node.stream_ops.llseek({position: 0}, -1, 0));
-  assert.deepEqual(t.calls, [0]);
-});
-test('closing IO wakes a waiting emulator and terminates the network worker', () => {
-  let terminated = 0, closed = 0;
-  const win = {SharedArrayBuffer, MessageChannel: class {constructor() {this.port1 = this.port2 = {close() {closed++;}};}},
-    Worker: class {postMessage() {} terminate() {terminated++;}}};
-  const io = createDiscIO(win, source, () => {}), control = new Int32Array(io.buffer, 0, 4);
-  io.close(); assert.equal(control[2], 1); assert.equal(control[0], -1); assert.equal(terminated, 1); assert.equal(closed, 2);
+  assert.throws(() => node.stream_ops.llseek({position: 0}, -1, 0)); assert.equal(t.calls.length, 1);
 });
