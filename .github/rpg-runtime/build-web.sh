@@ -49,6 +49,6 @@ if ! cmp -s .github/rpg-runtime/bundler/package-lock.json .retrom-build/bundler/
   npm ci --prefix .retrom-build/bundler --cache .retrom-build/npm-cache --no-audit --no-fund
 fi
 .retrom-build/bundler/node_modules/.bin/esbuild \
-  libretro/retrom/ppsspp-host.mjs libretro/retrom/ppsspp.worker.mjs libretro/retrom/ppsspp-io.worker.mjs \
+  libretro/retrom/ppsspp-host.mjs libretro/retrom/ppsspp.worker.mjs \
   --bundle --format=esm --platform=browser --target=es2022 --external:./ppsspp.js \
   --outdir=.retrom-build/web --out-extension:.js=.mjs

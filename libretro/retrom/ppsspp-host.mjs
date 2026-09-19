@@ -1,10 +1,12 @@
 import {installInput} from './ppsspp-input.mjs';
 import {createAudio} from './ppsspp-audio.mjs';
-import {createDiscIO} from './ppsspp-disc.mjs';
+import {contentAbi, contractSha256, validateContent} from './ppsspp-content.mjs';
+export {contentAbi, contractSha256};
 
-export const abi = 'ppsspp-host-v2';
-export async function createPPSSPPHost({target, source, restore, onFailure, signal}) {
+export const abi = 'ppsspp-host-v3';
+export async function createPPSSPPHost({target, source, restore, onFailure, signal, content}) {
   signal?.throwIfAborted();
+  validateContent(source, content);
   const win = target.ownerDocument.defaultView;
   const canvas = target.ownerDocument.createElement('canvas'); canvas.width = 480; canvas.height = 272; canvas.id = 'canvas'; canvas.tabIndex = 0;
   target.append(canvas);
@@ -14,11 +16,15 @@ export async function createPPSSPPHost({target, source, restore, onFailure, sign
     audio = createAudio(win);
   } catch (error) {worker?.terminate(); canvas.remove(); throw error;}
   const pending = new Map();
-  let sequence = 0, stopped = false, frames = 0;
+  let sequence = 0, stopped = false, frames = 0, contentReady = false, stopPromise;
   const rejectAll = error => {for (const item of pending.values()) {win.clearTimeout(item.timer); item.reject(error);} pending.clear();};
   const fatal = error => {rejectAll(error); if (!stopped) {onFailure(error); void stop();}};
   worker.onerror = () => fatal(new Error('PPSSPP_WORKER_FAILED'));
   worker.onmessage = ({data}) => {
+    if (data.kind === 'content-client-ready') {
+      if (data.abi !== contentAbi || data.contractSha256 !== contractSha256) {fatal(Error('CONTENT_IO_ABI_MISMATCH')); return;}
+      contentReady = true; return;
+    }
     if (data.kind === 'audio') {audio.push(data.samples); return;}
     if (data.kind === 'frames') {frames = data.value; return;}
     if (data.kind === 'diagnostic') {console.warn('PPSSPP:', data.message); return;}
@@ -36,19 +42,20 @@ export async function createPPSSPPHost({target, source, restore, onFailure, sign
       pending.set(id, {resolve, reject, timer}); worker.postMessage({id, type, value}, transfers);
     });
   }
-  let input, disc;
-  async function stop() {
+  let input;
+  function stop() {return stopPromise ??= Promise.resolve().then(stopNative);}
+  async function stopNative() {
     if (stopped) return;
-    input?.stop(); disc?.close(); signal?.removeEventListener('abort', abort);
+    input?.stop(); signal?.removeEventListener('abort', abort);
     const stopping = call('stop'); stopped = true;
     try {await stopping;} catch {} finally {worker.terminate(); rejectAll(new Error('PPSSPP_RUNTIME_EXITED')); canvas.remove(); await audio.stop();}
   }
   const abort = () => {void stop();};
   try {
     signal?.throwIfAborted(); signal?.addEventListener('abort', abort, {once: true});
-    disc = createDiscIO(win, source, fatal);
     const surface = canvas.transferControlToOffscreen();
-    await call('start', {canvas: surface, source, buffer: disc.buffer, port: disc.port, restore}, [surface, disc.port]);
+    await call('start', {canvas: surface, source, content, restore}, [surface, content.port]);
+    if (!contentReady) throw Error('CONTENT_IO_ABI_MISMATCH');
     signal?.throwIfAborted();
     input = installInput(win, value => {if (!stopped) worker.postMessage({id: -1, type: 'input', value});});
     canvas.focus();
@@ -61,4 +68,4 @@ export async function createPPSSPPHost({target, source, restore, onFailure, sign
     setVolume: value => audio.volume(value),
   };
 }
-globalThis.__RETROM_PPSSPP_V1__ = {abi, createPPSSPPHost};
+globalThis.__RETROM_PPSSPP_V1__ = {abi, contentAbi, contractSha256, createPPSSPPHost};

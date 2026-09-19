@@ -1,7 +1,8 @@
 import createPPSSPP from './ppsspp.js';
+import {loadContentReader, contentAbi, contractSha256} from './ppsspp-content.mjs';
 import {mountDisc} from './ppsspp-disc.mjs';
 
-let core, canvas, timer, paused = true, ready = false, frames = 0;
+let core, contentReader, canvas, timer, paused = true, ready = false, frames = 0;
 const maximum = 256 * 1024 * 1024;
 const reply = (id, value, transfer = []) => postMessage({id, value}, transfer);
 const fail = (id, error) => {postMessage({kind: 'diagnostic', message: error.stack || error.message}); postMessage({id, error: error.message || 'PPSSPP_RUNTIME_FAILED'});};
@@ -74,6 +75,8 @@ function decodeState(bytes) {
 async function start(value) {
   canvas = value.canvas;
   const restored = value.restore ? decodeState(value.restore) : null;
+  contentReader = await loadContentReader(value.source, value.content);
+  postMessage({kind: 'content-client-ready', abi: contentAbi, contractSha256});
   core = await createPPSSPP({canvas, noInitialRun: true, print: () => {},
     printErr: message => postMessage({kind: 'diagnostic', message}),
     locateFile: name => new URL(name, import.meta.url).href});
@@ -81,7 +84,7 @@ async function start(value) {
   for (const file of restored?.files ?? []) {
     core.FS.mkdirTree(file.path.slice(0, file.path.lastIndexOf('/'))); core.FS.writeFile(file.path, file.bytes);
   }
-  const path = mountDisc(core.FS, value.source, value.buffer, value.port);
+  const path = mountDisc(core.FS, value.source, contentReader);
   if (!core.ccall('psp_start', 'number', ['string'], [path])) throw new Error('PPSSPP_START_FAILED');
   const deadline = performance.now() + 45000;
   while (!ready) {
@@ -96,7 +99,7 @@ async function start(value) {
 }
 async function command(type, value) {
   if (type === 'start') return start(value);
-  if (!core) throw new Error('PPSSPP_NOT_READY');
+  if (!core) {if (type === 'stop') {contentReader?.close(); return;} throw new Error('PPSSPP_NOT_READY');}
   switch (type) {
   case 'input': core._psp_input(value.mask, value.x, value.y); return;
   case 'pause': paused = true; stopLoop(); core._psp_pause(); return;
@@ -109,7 +112,7 @@ async function command(type, value) {
   case 'screenshot': return canvas.convertToBlob({type: 'image/png'});
   case 'stop':
     paused = true; stopLoop();
-    try {core._psp_stop();} finally {core.PThread?.terminateAllThreads();}
+    try {core._psp_stop();} finally {contentReader?.close(); core.PThread?.terminateAllThreads();}
     return;
   default: throw new Error('PPSSPP_COMMAND_INVALID');
   }

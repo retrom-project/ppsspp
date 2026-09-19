@@ -22,7 +22,10 @@ async function instance() {
     setTimeout: (fn, ms) => {if (ms === 0) setImmediate(fn); return 1;}, clearTimeout: () => {}, self: {}, postMessage: msg => messages.push(msg)});
   const source = await readFile(new URL('../ppsspp.worker.mjs', import.meta.url), 'utf8');
   const module = new vm.SourceTextModule(source, {context, initializeImportMeta: meta => {meta.url = 'http://localhost/core/';}});
-  await module.link(specifier => specifier.includes('disc') ? new vm.SyntheticModule(['mountDisc'], function () {
+  await module.link(specifier => specifier.includes('content') ? new vm.SyntheticModule(['loadContentReader', 'contentAbi', 'contractSha256'], function () {
+    this.setExport('loadContentReader', async () => ({close: () => calls.push(['contentClosed'])}));
+    this.setExport('contentAbi', 'content-io-v1'); this.setExport('contractSha256', 'a'.repeat(64));
+  }, {context}) : specifier.includes('disc') ? new vm.SyntheticModule(['mountDisc'], function () {
     this.setExport('mountDisc', () => '/game/content.iso');
   }, {context}) : new vm.SyntheticModule(['default'], function () {this.setExport('default', async () => core);}, {context}));
   await module.evaluate();
@@ -44,7 +47,7 @@ test('checkpoint restores native state and memory stick before boot in a new ins
   assert.deepEqual(second.calls.find(c => c[0] === 'restore'), ['restore', 1, 2, 3, 4]);
   await second.command('input', {mask: 1 << 8, x: 12, y: 0});
   assert.deepEqual(second.calls.at(-1), ['input', 256, 12, 0]);
-  await second.command('stop'); assert.deepEqual(second.calls.slice(-2), [['stop'], ['threadsStopped']]);
+  await second.command('stop'); assert.deepEqual(second.calls.slice(-3), [['stop'], ['contentClosed'], ['threadsStopped']]);
 });
 test('invalid/truncated and path-escaping snapshots never boot as a new game', async () => {
   const first = await instance(); await first.start(); const saved = await first.command('checkpoint');

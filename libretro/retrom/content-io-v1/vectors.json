@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "objectKeys": [
+    {
+      "fields": [
+        "retrom-content-io",
+        1,
+        "https://example.test",
+        "https://example.test",
+        "GAME",
+        "FILE_SHA256",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "",
+        786449
+      ],
+      "expectedSha256": "0569fd85ab35f93781515141516ec40c4c7b99de3e3eb6b5ac7030aa291201e5"
+    }
+  ],
+  "ranges": [
+    {
+      "sizeBytes": 5368709243,
+      "offset": 4294967327,
+      "length": 4096,
+      "header": "bytes=4294967296-4295229439"
+    },
+    {
+      "sizeBytes": 9007199254740991,
+      "offset": 9007199254740990,
+      "length": 1,
+      "header": "bytes=9007199254478848-9007199254740990"
+    }
+  ],
+  "blocking": {
+    "headerBytes": 64,
+    "blockBytes": 262144,
+    "states": {
+      "IDLE": 0,
+      "REQUESTED": 1,
+      "OK": 2,
+      "ERROR": 3,
+      "CLOSED": 4
+    },
+    "slots": {
+      "state": 0,
+      "version": 1,
+      "requestSequence": 2,
+      "epoch": 3,
+      "resultLength": 4,
+      "errorNumber": 5,
+      "closed": 6,
+      "requestedLength": 7,
+      "readOrigin": 8,
+      "metricsSequence": 9,
+      "memoryHitLow": 10,
+      "memoryHitHigh": 11,
+      "persistentHitLow": 12,
+      "persistentHitHigh": 13,
+      "cacheBytesL1": 14,
+      "peakCacheBytesL1": 15
+    },
+    "origins": {
+      "NETWORK": 0,
+      "MEMORY": 1,
+      "PERSISTENT": 2
+    },
+    "metrics": "Single consumer writer; sequence is odd during update and even after. Low unsigned 32-bit plus high nonnegative 21-bit words encode safe-integer counters. Service snapshots never block."
+  }
+}
