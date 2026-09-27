@@ -12,7 +12,7 @@ The small frontend implements libretro environment, input, audio and lifecycle c
 EmulatorJS or RetroArch frontend is loaded. WebGL2, cross-origin isolation, SharedArrayBuffer,
 OffscreenCanvas and worker modules are required. PSP networking is disabled in this integration.
 
-The host ABI is `ppsspp-host-v3`, with `content-io-v1` and the exact runtime contract hash.
+The host ABI is `ppsspp-host-v4`, with `content-io-v1` and the exact runtime contract hash.
 The host accepts disc SHA-256/size metadata and a role-limited consumer port/SAB, never a game URL.
 The emulation worker imports the runtime-provided verified `sync-client.mjs` Blob URL, validates
 ABI/hash and acknowledges client readiness before native startup can succeed. The Provider owns

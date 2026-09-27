@@ -3,7 +3,7 @@ import {createAudio} from './ppsspp-audio.mjs';
 import {contentAbi, contractSha256, validateContent, verifiedAsset} from './ppsspp-content.mjs';
 export {contentAbi, contractSha256};
 
-export const abi = 'ppsspp-host-v3';
+export const abi = 'ppsspp-host-v4';
 export async function createPPSSPPHost({target, source, restore, onFailure, signal, content, assets}) {
   signal?.throwIfAborted();
   validateContent(source, content);
