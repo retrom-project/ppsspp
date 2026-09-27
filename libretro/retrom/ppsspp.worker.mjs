@@ -1,5 +1,4 @@
-import createPPSSPP from './ppsspp.js';
-import {loadContentReader, contentAbi, contractSha256} from './ppsspp-content.mjs';
+import {loadContentReader, contentAbi, contractSha256, verifiedAsset} from './ppsspp-content.mjs';
 import {mountDisc} from './ppsspp-disc.mjs';
 
 let core, contentReader, canvas, timer, paused = true, ready = false, frames = 0;
@@ -77,9 +76,11 @@ async function start(value) {
   const restored = value.restore ? decodeState(value.restore) : null;
   contentReader = await loadContentReader(value.source, value.content);
   postMessage({kind: 'content-client-ready', abi: contentAbi, contractSha256});
+  const {default: createPPSSPP} = await import(verifiedAsset(value.assets, 'ppsspp.js'));
   core = await createPPSSPP({canvas, noInitialRun: true, print: () => {},
     printErr: message => postMessage({kind: 'diagnostic', message}),
-    locateFile: name => new URL(name, import.meta.url).href});
+    mainScriptUrlOrBlob: verifiedAsset(value.assets, 'ppsspp.js'),
+    locateFile: name => verifiedAsset(value.assets, name)});
   core.FS.mkdirTree('/save'); core.FS.mkdirTree('/game');
   for (const file of restored?.files ?? []) {
     core.FS.mkdirTree(file.path.slice(0, file.path.lastIndexOf('/'))); core.FS.writeFile(file.path, file.bytes);

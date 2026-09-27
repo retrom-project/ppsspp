@@ -13,7 +13,7 @@
     }
   ],
   "releaseTagPattern": "^retrom-core-g2e6fd06ed6c7-r[1-9][0-9]*(-rc\\.[1-9][0-9]*)?$",
-  "adapterAbi": "ppsspp-host-v3",
+  "adapterAbi": "ppsspp-host-v4",
   "releaseAssets": [
     "LICENSE",
     "ppsspp.js",

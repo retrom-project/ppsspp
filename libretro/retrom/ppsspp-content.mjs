@@ -19,3 +19,8 @@ export async function loadContentReader(source, content, load = url => import(ur
   const {fileId, objectKey, sizeBytes, port, buffer, sessionId, channelId, epoch, l1BudgetBytes} = content;
   return module.createSyncContentReader({fileId, objectKey, sizeBytes, port, buffer, sessionId, channelId, epoch, l1BudgetBytes});
 }
+export function verifiedAsset(assets, name) {
+  const url = assets?.[name];
+  if (typeof url !== 'string' || !url.startsWith('blob:')) throw Error('PPSSPP_ASSET_INVALID');
+  return url;
+}

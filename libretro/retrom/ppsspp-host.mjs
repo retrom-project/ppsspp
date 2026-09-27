@@ -1,10 +1,10 @@
 import {installInput} from './ppsspp-input.mjs';
 import {createAudio} from './ppsspp-audio.mjs';
-import {contentAbi, contractSha256, validateContent} from './ppsspp-content.mjs';
+import {contentAbi, contractSha256, validateContent, verifiedAsset} from './ppsspp-content.mjs';
 export {contentAbi, contractSha256};
 
-export const abi = 'ppsspp-host-v3';
-export async function createPPSSPPHost({target, source, restore, onFailure, signal, content}) {
+export const abi = 'ppsspp-host-v4';
+export async function createPPSSPPHost({target, source, restore, onFailure, signal, content, assets}) {
   signal?.throwIfAborted();
   validateContent(source, content);
   const win = target.ownerDocument.defaultView;
@@ -12,7 +12,7 @@ export async function createPPSSPPHost({target, source, restore, onFailure, sign
   target.append(canvas);
   let worker, audio;
   try {
-    worker = new win.Worker(new URL('./ppsspp.worker.mjs', import.meta.url), {type: 'module'});
+    worker = new win.Worker(verifiedAsset(assets, 'ppsspp.worker.mjs'), {type: 'module'});
     audio = createAudio(win);
   } catch (error) {worker?.terminate(); canvas.remove(); throw error;}
   const pending = new Map();
@@ -54,7 +54,7 @@ export async function createPPSSPPHost({target, source, restore, onFailure, sign
   try {
     signal?.throwIfAborted(); signal?.addEventListener('abort', abort, {once: true});
     const surface = canvas.transferControlToOffscreen();
-    await call('start', {canvas: surface, source, content, restore}, [surface, content.port]);
+    await call('start', {canvas: surface, source, content, restore, assets}, [surface, content.port]);
     if (!contentReady) throw Error('CONTENT_IO_ABI_MISMATCH');
     signal?.throwIfAborted();
     input = installInput(win, value => {if (!stopped) worker.postMessage({id: -1, type: 'input', value});});

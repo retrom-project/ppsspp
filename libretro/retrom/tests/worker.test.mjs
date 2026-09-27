@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
+import {verifiedAsset} from '../ppsspp-content.mjs';
 
 async function instance() {
   const messages = [], files = new Map(), native = new Uint8Array([1, 2, 3, 4]), memory = new Uint8Array(1024);
@@ -21,10 +22,20 @@ async function instance() {
   const context = vm.createContext({Uint8Array, DataView, TextEncoder, TextDecoder, Blob, performance,
     setTimeout: (fn, ms) => {if (ms === 0) setImmediate(fn); return 1;}, clearTimeout: () => {}, self: {}, postMessage: msg => messages.push(msg)});
   const source = await readFile(new URL('../ppsspp.worker.mjs', import.meta.url), 'utf8');
-  const module = new vm.SourceTextModule(source, {context, initializeImportMeta: meta => {meta.url = 'http://localhost/core/';}});
-  await module.link(specifier => specifier.includes('content') ? new vm.SyntheticModule(['loadContentReader', 'contentAbi', 'contractSha256'], function () {
+  const module = new vm.SourceTextModule(source, {context, importModuleDynamically: async url => {
+    assert.equal(url, 'blob:https://core.test/module');
+    const native = new vm.SyntheticModule(['default'], function () {this.setExport('default', async options => {
+      assert.equal(options.locateFile('ppsspp.wasm'), 'blob:https://core.test/wasm');
+      assert.equal(options.locateFile('ppsspp.data'), 'blob:https://core.test/data');
+      assert.equal(options.mainScriptUrlOrBlob, url);
+      assert.throws(() => options.locateFile('unknown'), /ASSET/); return core;
+    });}, {context});
+    await native.link(() => {}); await native.evaluate(); return native;
+  }});
+  await module.link(specifier => specifier.includes('content') ? new vm.SyntheticModule(['loadContentReader', 'contentAbi', 'contractSha256', 'verifiedAsset'], function () {
     this.setExport('loadContentReader', async () => ({close: () => calls.push(['contentClosed'])}));
     this.setExport('contentAbi', 'content-io-v1'); this.setExport('contractSha256', 'a'.repeat(64));
+    this.setExport('verifiedAsset', verifiedAsset);
   }, {context}) : specifier.includes('disc') ? new vm.SyntheticModule(['mountDisc'], function () {
     this.setExport('mountDisc', () => '/game/content.iso');
   }, {context}) : new vm.SyntheticModule(['default'], function () {this.setExport('default', async () => core);}, {context}));
@@ -35,7 +46,8 @@ async function instance() {
     const message = messages.find(m => m.id === id); assert.ok(message, 'worker replied');
     if (message.error) throw new Error(message.error); return message.value;
   }
-  const start = restore => command('start', {canvas: {}, file: new Blob(['game']), extension: 'iso', restore});
+  const start = restore => command('start', {canvas: {}, restore, assets: {'ppsspp.js': 'blob:https://core.test/module',
+    'ppsspp.wasm': 'blob:https://core.test/wasm', 'ppsspp.data': 'blob:https://core.test/data'}});
   return {command, start, calls, files};
 }
 test('checkpoint restores native state and memory stick before boot in a new instance', async () => {
