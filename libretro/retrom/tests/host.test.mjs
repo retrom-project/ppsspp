@@ -1,4 +1,4 @@
-import {contentAbi, contractSha256, validateContent} from '../ppsspp-content.mjs';
+import {contentAbi, contractSha256, validateContent, verifiedAsset} from '../ppsspp-content.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -8,8 +8,9 @@ async function host(createAudio, Worker) {
   const context = vm.createContext({URL});
   const source = await readFile(new URL('../ppsspp-host.mjs', import.meta.url), 'utf8');
   const module = new vm.SourceTextModule(source, {context, initializeImportMeta: meta => {meta.url = 'https://core.test/ppsspp-host.mjs';}});
-  await module.link(specifier => specifier.includes('content') ? new vm.SyntheticModule(['contentAbi', 'contractSha256', 'validateContent'], function () {
+  await module.link(specifier => specifier.includes('content') ? new vm.SyntheticModule(['contentAbi', 'contractSha256', 'validateContent', 'verifiedAsset'], function () {
     this.setExport('contentAbi', contentAbi); this.setExport('contractSha256', contractSha256); this.setExport('validateContent', validateContent);
+    this.setExport('verifiedAsset', verifiedAsset);
   }, {context}) : new vm.SyntheticModule([specifier.includes('input') ? 'installInput' : 'createAudio'], function () {
     this.setExport(specifier.includes('input') ? 'installInput' : 'createAudio', specifier.includes('input') ? () => ({}) : createAudio);
   }, {context}));
@@ -17,6 +18,8 @@ async function host(createAudio, Worker) {
   const children = [], canvas = {remove() {children.splice(children.indexOf(canvas), 1);}};
   const target = {append: value => children.push(value), ownerDocument: {defaultView: {Worker}, createElement: () => canvas}};
   return {children, start: () => module.namespace.createPPSSPPHost({target, source: {sha256: 'a'.repeat(64), sizeBytes: 3},
+    assets: {'ppsspp.worker.mjs': 'blob:https://core.test/worker', 'ppsspp.js': 'blob:https://core.test/module',
+      'ppsspp.wasm': 'blob:https://core.test/wasm', 'ppsspp.data': 'blob:https://core.test/data'},
     content: {abi: contentAbi, contractSha256, sizeBytes: 3, objectKey: 'b'.repeat(64), syncClientUrl: 'blob:https://core.test/client',
       buffer: new SharedArrayBuffer(262208), port: {postMessage() {}}}})};
 }
@@ -26,4 +29,10 @@ test('failed worker/audio construction releases the canvas and any created worke
   let terminated = false;
   const unsupported = await host(() => {throw Error('Audio unavailable');}, class {terminate() {terminated = true;}});
   await assert.rejects(unsupported.start(), /Audio unavailable/); assert.equal(unsupported.children.length, 0); assert.equal(terminated, true);
+});
+test('starts only the Provider-verified worker URL', async () => {
+  let url;
+  const core = await host(() => ({}), class {constructor(value) {url = String(value); throw Error('stop after URL observation');}});
+  await assert.rejects(core.start(), /stop after URL observation/);
+  assert.equal(url, 'blob:https://core.test/worker');
 });

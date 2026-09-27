@@ -18,6 +18,12 @@ The emulation worker imports the runtime-provided verified `sync-client.mjs` Blo
 ABI/hash and acknowledges client readiness before native startup can succeed. The Provider owns
 all HTTP, caching, persistence and cancellation. No separate PPSSPP I/O worker is built or released.
 
+Core startup requires an `assets` map containing Provider-verified Blob URLs for `ppsspp.js`,
+`ppsspp.wasm`, `ppsspp.data` and `ppsspp.worker.mjs`. The host starts only that worker;
+the worker imports only that module and supplies the same map to Emscripten and pthread startup.
+Unknown assets fail without fetching a URL inferred from `import.meta.url`. The Provider keeps
+the URLs alive until native stop and releases them on either failed startup or exit.
+
 The read-only virtual disc preserves `/game/content.<format>`, native seek/read and EOF semantics.
 Its facade splits native reads into <=256 KiB portions sharing one 15-second logical deadline;
 only the public sync client caches blocks. Native stop runs while content remains available, then
