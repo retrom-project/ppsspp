@@ -8,12 +8,10 @@ export function discReader(source, reader) {
     const count = Math.max(0, Math.min(length, source.sizeBytes - position));
     // EOF still observes revocation; no facade or native warm path bypasses the service.
     if (!count) {reader.readInto(Math.min(position, source.sizeBytes), output.subarray(offset, offset)); return 0;}
-    const deadline = performance.now() + 15000;
+    // The public reader bounds each network attempt and waits through outages, so portions share no deadline.
     for (let done = 0; done < count;) {
-      const remaining = Math.floor(deadline - performance.now());
-      if (remaining <= 0) {reader.close(); throw Error('CONTENT_IO_TIMEOUT');}
       const size = Math.min(262144, count - done);
-      if (reader.readInto(position + done, output.subarray(offset + done, offset + done + size), remaining) !== size) {
+      if (reader.readInto(position + done, output.subarray(offset + done, offset + done + size)) !== size) {
         reader.close(); throw Error('CONTENT_IO_LENGTH_MISMATCH');
       }
       done += size;

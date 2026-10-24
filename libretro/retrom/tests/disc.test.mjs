@@ -19,13 +19,23 @@ test('[BR-03] UNIT/ppsspp-disc preserves native offset, length, EOF and read-onl
   assert.equal(read(bytes, 0, 10, source.sizeBytes), 0); assert.throws(() => read(bytes, 0, 11, 0), /BOUNDS/);
   t.reader.close(); assert.throws(() => read(bytes, 0, 0, source.sizeBytes), /ABORTED/);
 });
-test('[X-30] UNIT/ppsspp-disc splits native reads larger than the public logical limit under one deadline', () => {
+test('[X-30] UNIT/ppsspp-disc splits native reads larger than the public logical limit', () => {
   const t = transport(), big = {...source, sizeBytes: 20 * 1024 * 1024};
   const output = new Uint8Array(17 * 1024 * 1024 + 19), read = discReader(big, t.reader);
   assert.equal(read(output, 0, output.length, 13), output.length);
   assert.equal(t.calls.length, Math.ceil(output.length / B));
-  for (const call of t.calls) {assert.ok(call.length <= B); assert.ok(call.timeout <= 15000);}
+  for (const call of t.calls) {assert.ok(call.length <= B); assert.equal(call.timeout, undefined);}
   assert.equal(output.at(-1), Math.floor((13 + output.length - 1) / B) + 1);
+});
+test('[NET-13] UNIT/ppsspp-disc lets each portion wait for the network without a shared deadline', t => {
+  const transfer = transport(), read = discReader(source, transfer.reader);
+  let clock = 0; t.mock.method(performance, 'now', () => clock);
+  const readInto = transfer.reader.readInto;
+  // Each portion takes longer than the old 15-second logical deadline, as while waiting for the network.
+  transfer.reader.readInto = (...args) => {clock += 20000; return readInto(...args);};
+  const output = new Uint8Array(3 * B);
+  assert.equal(read(output, 0, output.length, 0), output.length);
+  assert.equal(transfer.calls.length, 3); assert.equal(output.at(-1), 3);
 });
 test('virtual disc exposes full size and seeking while its backing allocation stays empty', () => {
   const t = transport(); let node;
