@@ -25,8 +25,8 @@ Unknown assets fail without fetching a URL inferred from `import.meta.url`. The 
 the URLs alive until native stop and releases them on either failed startup or exit.
 
 The read-only virtual disc preserves `/game/content.<format>`, native seek/read and EOF semantics.
-Its facade splits native reads into <=256 KiB portions sharing one 15-second logical deadline;
-only the public sync client caches blocks. Native stop runs while content remains available, then
+Its facade splits native reads into <=256 KiB portions without a deadline of their own: the public
+sync client bounds each network attempt and waits through outages. Only that client caches blocks. Native stop runs while content remains available, then
 the reader closes. Forced Provider shutdown revokes the shared slot and wakes blocked readers.
 Contract/schema/error-number files in `libretro/retrom/content-io-v1` are immutable mirrors for
 ABI checking, not a second implementation of transport or storage.
