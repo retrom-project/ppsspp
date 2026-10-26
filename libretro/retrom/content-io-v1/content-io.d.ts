@@ -153,6 +153,7 @@ export interface WireFieldsV1 {
   OBJECT_REVOKED: Readonly<{objectKey: string; codeNumber: number}>;
   DIAGNOSTIC: Readonly<{codeNumber: number; objectKey: string | null; operation: "CACHE_PROBE" | "CACHE_READ" | "CACHE_WRITE" | "CACHE_GC" | "CACHE_DEGRADE" | "READ" | "MATERIALIZE" | "CLOSE" | "ABI"; counts: ContentDiagnosticCountsV1}>;
   READ: Readonly<{fileId: string; offset: number; length: number; timeoutMs: number}>;
+  READ_PROGRESS: Readonly<{readRequestId: number; fileId: string; networkBytes: number}>;
   READ_OK: Readonly<{fileId: string; offset: number; length: number; bytes: ArrayBuffer; origin: ContentReadOriginV1}>;
   READ_ERROR: Readonly<{codeNumber: number; scope: "REQUEST" | "OBJECT" | "SESSION"}>;
   FILE_REVOKED: Readonly<{fileId: string; codeNumber: number}>;

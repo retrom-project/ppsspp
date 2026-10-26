@@ -63,6 +63,7 @@
       "MEMORY": 1,
       "PERSISTENT": 2
     },
-    "metrics": "Single consumer writer; sequence is odd during update and even after. Low unsigned 32-bit plus high nonnegative 21-bit words encode safe-integer counters. Service snapshots never block."
+    "metrics": "Single consumer writer; sequence is odd during update and even after. Low unsigned 32-bit plus high nonnegative 21-bit words encode safe-integer counters. Service snapshots never block.",
+    "progress": "While REQUESTED, resultLength is the monotonically increasing network-byte count for requestSequence; a changed count wakes the consumer and renews only its idle deadline. OK replaces it with the final result length; ERROR replaces it with the error code."
   }
 }
