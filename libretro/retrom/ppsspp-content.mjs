@@ -1,5 +1,5 @@
 export const contentAbi = 'content-io-v1';
-export const contractSha256 = '9601f63ba9d1bad095b42b32a3d6167166535be246a87f0efac7c5b125ed27bf';
+export const contractSha256 = 'e1f59c8e5e6c1175444a09c0e8c8c4095a3be6d6c3d836a1c594e4f67f026e21';
 export function validateContent(source, content) {
   if (!source || Object.keys(source).sort().join(',') !== 'sha256,sizeBytes' || !/^[a-f0-9]{64}$/.test(source.sha256) ||
       !Number.isSafeInteger(source.sizeBytes) || source.sizeBytes < 1 || source.sizeBytes > 2147483647 ||
