@@ -3,23 +3,31 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {verifiedAsset} from '../ppsspp-content.mjs';
+import {webcrypto} from 'node:crypto';
+import {decodeSave, saveRoot} from '../ppsspp-save.mjs';
 
 async function instance() {
-  const messages = [], files = new Map(), native = new Uint8Array([1, 2, 3, 4]), memory = new Uint8Array(1024);
+  const messages = [], files = new Map();
   const calls = [], directories = new Set(['/save', '/game']);
+  let fd = 0;
   const core = {
-    FS: {mkdirTree: path => directories.add(path), mount: (...args) => calls.push(['mount', ...args]),
-      writeFile: (path, bytes) => files.set(path, bytes.slice()), readFile: path => files.get(path),
-      isDir: mode => mode === 1, stat: path => ({mode: directories.has(path) ? 1 : 0}),
+    FS: {mkdirTree: path => {for (let i = 1; i <= path.split('/').length; i++) directories.add(path.split('/').slice(0, i).join('/'));},
+      mount: (...args) => calls.push(['mount', ...args]), readFile: path => files.get(path),
+      open(path, flags) {return {path, flags, fd: ++fd};},
+      write(stream, bytes, offset, size) {files.set(stream.path, bytes.slice(offset, offset + size)); return size;},
+      close(stream) {stream.fd = null;},
+      writeFile(path, bytes) {const stream = core.FS.open(path, 1); core.FS.write(stream, bytes, 0, bytes.length); core.FS.close(stream);},
+      utime: (path, atime, mtime) => calls.push(['mtime', path, mtime]),
+      isDir: mode => mode === 1, isFile: mode => mode === 0,
+      lstat: path => ({mode: directories.has(path) ? 1 : 0, size: files.get(path)?.length ?? 0, mtime: new Date(1000)}),
       readdir: path => ['.', '..', ...new Set([...files.keys(), ...directories].filter(p => p.startsWith(path + '/')).map(p => p.slice(path.length + 1).split('/')[0]))]},
-    HEAPU8: memory, WORKERFS: {}, _malloc: () => 16, _free: () => {}, ccall: () => 1,
-    _psp_step: () => 2, _psp_pause: () => calls.push(['pause']), _psp_state_size: () => 4,
-    _psp_save: pointer => {memory.set(native, pointer); return 1;},
-    _psp_load: (pointer, size) => {calls.push(['restore', ...memory.slice(pointer, pointer + size)]); return 1;},
+    ccall: (name, type, types, args) => {calls.push(['boot', ...args, [...files.keys()]]); return 1;},
+    _psp_step: () => 2, _psp_pause: () => calls.push(['pause']), _psp_save_ready: () => 1,
+    _psp_state_size: () => {throw new Error('must not serialize execution state');},
     _psp_input: (...args) => calls.push(['input', ...args]), _psp_stop: () => calls.push(['stop']),
     PThread: {terminateAllThreads: () => calls.push(['threadsStopped'])},
   };
-  const context = vm.createContext({Uint8Array, DataView, TextEncoder, TextDecoder, Blob, performance,
+  const context = vm.createContext({Uint8Array, DataView, TextEncoder, TextDecoder, Blob, performance, crypto: webcrypto,
     setTimeout: (fn, ms) => {if (ms === 0) setImmediate(fn); return 1;}, clearTimeout: () => {}, self: {}, postMessage: msg => messages.push(msg)});
   const source = await readFile(new URL('../ppsspp.worker.mjs', import.meta.url), 'utf8');
   const module = new vm.SourceTextModule(source, {context, importModuleDynamically: async url => {
@@ -32,7 +40,8 @@ async function instance() {
     });}, {context});
     await native.link(() => {}); await native.evaluate(); return native;
   }});
-  await module.link(specifier => specifier.includes('content') ? new vm.SyntheticModule(['loadContentReader', 'contentAbi', 'contractSha256', 'verifiedAsset'], function () {
+  await module.link(async specifier => specifier.includes('save') ? new vm.SourceTextModule(
+    await readFile(new URL('../ppsspp-save.mjs', import.meta.url), 'utf8'), {context}) : specifier.includes('content') ? new vm.SyntheticModule(['loadContentReader', 'contentAbi', 'contractSha256', 'verifiedAsset'], function () {
     this.setExport('loadContentReader', async () => ({close: () => calls.push(['contentClosed'])}));
     this.setExport('contentAbi', 'content-io-v1'); this.setExport('contractSha256', 'a'.repeat(64));
     this.setExport('verifiedAsset', verifiedAsset);
@@ -46,23 +55,30 @@ async function instance() {
     const message = messages.find(m => m.id === id); assert.ok(message, 'worker replied');
     if (message.error) throw new Error(message.error); return message.value;
   }
-  const start = restore => command('start', {canvas: {}, restore, assets: {'ppsspp.js': 'blob:https://core.test/module',
+  const start = restore => command('start', {canvas: {}, restore, source: {sha256: 'a'.repeat(64), sizeBytes: 3}, assets: {'ppsspp.js': 'blob:https://core.test/module',
     'ppsspp.wasm': 'blob:https://core.test/wasm', 'ppsspp.data': 'blob:https://core.test/data'}});
-  return {command, start, calls, files};
+  const write = (path, bytes) => {core.FS.mkdirTree(path.slice(0, path.lastIndexOf('/'))); core.FS.writeFile(path, bytes);};
+  return {command, start, calls, files, write};
 }
-test('checkpoint restores native state and memory stick before boot in a new instance', async () => {
+test('native checkpoint restores complete savedata and virtual MAC before boot without loading execution state', async () => {
   const first = await instance(); await first.start();
-  first.files.set('/save/settings.ini', new Uint8Array([9, 8]));
+  first.write(saveRoot + '/SLOT/DATA.BIN', new Uint8Array([9, 8]));
+  first.write('/save/PSP/SYSTEM/irrelevant.ini', new Uint8Array([1]));
   const saved = await first.command('checkpoint');
   const second = await instance(); await second.start(saved);
-  assert.deepEqual(second.files.get('/save/settings.ini'), new Uint8Array([9, 8]));
-  assert.deepEqual(second.calls.find(c => c[0] === 'restore'), ['restore', 1, 2, 3, 4]);
+  assert.deepEqual(second.files.get(saveRoot + '/SLOT/DATA.BIN'), new Uint8Array([9, 8]));
+  assert.equal(second.files.has('/save/PSP/SYSTEM/irrelevant.ini'), false);
+  const archive = decodeSave(saved, 'a'.repeat(64)), boot = second.calls.find(c => c[0] === 'boot');
+  assert.equal(boot[2], archive.mac);
+  assert.equal(boot[3].includes(saveRoot + '/SLOT/DATA.BIN'), true);
+  await assert.rejects(second.command('checkpoint'), /SAVE_UNAVAILABLE/);
   await second.command('input', {mask: 1 << 8, x: 12, y: 0});
   assert.deepEqual(second.calls.at(-1), ['input', 256, 12, 0]);
   await second.command('stop'); assert.deepEqual(second.calls.slice(-3), [['stop'], ['contentClosed'], ['threadsStopped']]);
 });
 test('invalid/truncated and path-escaping snapshots never boot as a new game', async () => {
-  const first = await instance(); await first.start(); const saved = await first.command('checkpoint');
+  const first = await instance(); await first.start(); first.write(saveRoot + '/SLOT/DATA.BIN', Uint8Array.of(1));
+  const saved = await first.command('checkpoint');
   const bad = saved.slice(0, -1); await assert.rejects((await instance()).start(bad), /CHECKPOINT_INVALID/);
   const header = new TextEncoder().encode(JSON.stringify({version: 1, stateSize: 1, files: [{path: '../escape', size: 1}]}));
   const bytes = new Uint8Array(4 + header.length + 2); new DataView(bytes.buffer).setUint32(0, header.length, true); bytes.set(header, 4);

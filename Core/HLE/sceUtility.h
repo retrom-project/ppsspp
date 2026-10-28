@@ -122,6 +122,9 @@ enum class UtilityDialogType {
 void __UtilityInit();
 void __UtilityDoState(PointerWrap &p);
 void __UtilityShutdown();
+#if defined(__EMSCRIPTEN__)
+bool __UtilityHasPendingSavedataIO();
+#endif
 
 void UtilityDialogInitialize(UtilityDialogType type, int delayUs, int priority);
 void UtilityDialogShutdown(UtilityDialogType type, int delayUs, int priority);

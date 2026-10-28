@@ -82,6 +82,9 @@ public:
 	void DoState(PointerWrap &p);
 
 	bool HasOperation(u32 handle);
+#if defined(__EMSCRIPTEN__)
+	bool HasPendingOperations();
+#endif
 	void ScheduleOperation(const AsyncIOEvent &ev);
 	void Shutdown();
 

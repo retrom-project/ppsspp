@@ -9,8 +9,8 @@
 #include <emscripten/html5.h>
 #include "libretro.h"
 #include "Core/System.h"
-#include "Core/SaveState.h"
-#include "Common/Serialize/Serializer.h"
+#include "Core/HLE/sceIo.h"
+#include "Core/HLE/sceUtility.h"
 #include "libretro/LibretroGraphicsContext.h"
 
 extern "C" bool retro_retrom_state_ready();
@@ -24,8 +24,6 @@ retro_hw_render_callback hardware{};
 unsigned buttons = 0;
 int16_t analogX = 0, analogY = 0;
 bool loaded = false, stopped = false;
-std::vector<u8> pendingState;
-constexpr size_t MAX_STATE = 256 * 1024 * 1024;
 
 void Log(enum retro_log_level level, const char *format, ...) {
 	if (level < RETRO_LOG_WARN) return;
@@ -102,8 +100,15 @@ int16_t Input(unsigned port, unsigned device, unsigned index, unsigned id) {
 }
 
 extern "C" {
-EMSCRIPTEN_KEEPALIVE int psp_start(const char *path) {
-	if (loaded) return 0;
+EMSCRIPTEN_KEEPALIVE int psp_start(const char *path, const char *mac) {
+	if (loaded || !mac || strlen(mac) != 17) return 0;
+	for (int i = 0; i < 12; ++i) {
+		char digit = mac[i + i / 2];
+		if (!((digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f'))) return 0;
+		char key[64];
+		snprintf(key, sizeof(key), "ppsspp_change_mac_address%02d", i + 1);
+		options[key] = std::string(1, digit);
+	}
 	InstallCanvas();
 	EmscriptenWebGLContextAttributes attrs;
 	emscripten_webgl_init_context_attributes(&attrs);
@@ -143,32 +148,12 @@ EMSCRIPTEN_KEEPALIVE void psp_pause() {
 	buttons = 0; analogX = analogY = 0;
 	if (loaded && Libretro::useEmuThread) Libretro::EmuThreadPause();
 }
-EMSCRIPTEN_KEEPALIVE size_t psp_state_size() {
+EMSCRIPTEN_KEEPALIVE int psp_save_ready(int synchronize) {
 	if (!loaded || !retro_retrom_state_ready()) return 0;
-	psp_pause();
-	pendingState.clear();
-	if (SaveState::SaveToRam(pendingState) != CChunkFileReader::ERROR_NONE || pendingState.size() > MAX_STATE) {
-		pendingState.clear();
-		return 0;
-	}
-	return pendingState.size();
-}
-EMSCRIPTEN_KEEPALIVE int psp_save(uint8_t *data, size_t size) {
-	if (!data || !size || size != pendingState.size()) {
-		return 0;
-	}
-	memcpy(data, pendingState.data(), size);
-	std::vector<u8>().swap(pendingState);
-	return 1;
-}
-EMSCRIPTEN_KEEPALIVE int psp_load(uint8_t *data, size_t size) {
-	if (!data || !size || size > MAX_STATE || !loaded || !retro_retrom_state_ready()) {
-		return 0;
-	}
-	psp_pause();
-	std::vector<u8> state(data, data + size);
-	std::string error;
-	return SaveState::LoadFromRam(state, &error) == CChunkFileReader::ERROR_NONE;
+	// Preserve held input. Native IO may proxy work to this JS worker, so report busy
+	// and let its event loop run rather than blocking in SaveToRam/SyncThread/join.
+	if (synchronize && Libretro::useEmuThread) Libretro::EmuThreadPause();
+	return !__UtilityHasPendingSavedataIO() && !__IoHasPendingOperations();
 }
 EMSCRIPTEN_KEEPALIVE void psp_stop() {
 	if (!loaded) return;
@@ -177,6 +162,5 @@ EMSCRIPTEN_KEEPALIVE void psp_stop() {
 	retro_unload_game();
 	retro_deinit();
 	loaded = false;
-	std::vector<u8>().swap(pendingState);
 }
 }

@@ -31,13 +31,21 @@ the reader closes. Forced Provider shutdown revokes the shared slot and wakes bl
 Contract/schema/error-number files in `libretro/retrom/content-io-v1` are immutable mirrors for
 ABI checking, not a second implementation of transport or storage.
 
-`ppsspp-state-v1` contains a little-endian uint32 JSON-header length, the UTF-8 header, complete
-native state, then memory-stick files in header order. The header declares version, stateSize and
-relative file paths/sizes. Paths, truncation, total size (256 MiB) and header size (1 MiB) are checked.
-Memory-stick files are restored before boot; native state is restored only after the boot transition
-finishes on the emulation frontend. Public gzip is applied exactly once by retrom-runtime.
-EmulatorJS state formats are not declared compatible. Future upstream updates require a real
-cross-version state test before retaining this format as readable.
+`ppsspp-game-save-v1` contains a little-endian uint32 JSON-header length, the UTF-8 header, then
+native file bytes in header order. The header declares version, disc SHA-256, virtual PSP MAC and
+relative file paths/sizes/timestamps. Only the isolated instance's `PSP/SAVEDATA` is included, with
+all slots, metadata and icons. Paths, duplicates, file count (4096), truncation, total size (256 MiB)
+and header size (1 MiB) are checked. Files and MAC are restored before boot; no emulator state is
+serialized or loaded. Public gzip is applied exactly once by retrom-runtime.
+
+The host exposes native checkpoint availability and acknowledges only the exact exported bytes
+after durable persistence. Identical content has one revision, independent of native write count
+or timestamps. No progress means no initial checkpoint; deletion of existing progress can export
+an empty file set. FS mutation observation covers direct sceIo write/truncate/rename/delete as
+well as utility savedata. Writable handles and SaveIO/AsyncIO completion block partial exports.
+The native readiness check pauses emulation while preserving held input and reports pending IO
+without joining threads that may need JS filesystem proxying. Worker ticks and commands share
+one serialized queue; the main-thread availability getter reads only cached status.
 
 ## Build and test
 
@@ -64,7 +72,7 @@ commit, dirty state, recursive source-tree hash, ABI and each output hash. Candi
 uncommitted work; release.py rejects dirty source. Run the upstream native unit and tests_good
 software-renderer suites as documented in `docs/building.md`. Run the Retrom `ACC-PSP-001`
 product case with legally supplied fixtures: import, review preview, product launch, standard gamepad
-direction/confirm, audio, pause, instant checkpoint, different-launch restore, continued input,
+direction/confirm, audio, pause, in-game save, native export, different-launch in-game load, continued input,
 persistent content reuse and exit. Keep ROMs and generated evidence out of source control.
 
 ## Maintenance and release

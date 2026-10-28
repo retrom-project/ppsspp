@@ -32,7 +32,7 @@ em++ libretro/retrom/frontend.cpp .retrom-build/web/ppsspp_libretro.a \
   -sSTACK_SIZE=8388608 -sDEFAULT_PTHREAD_STACK_SIZE=2097152 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createPPSSPP -sENVIRONMENT=worker \
   -sEXPORTED_RUNTIME_METHODS='["FS","PThread","ccall","HEAPU8","HEAP16"]' \
-  -sEXPORTED_FUNCTIONS='["_malloc","_free","_psp_start","_psp_step","_psp_pause","_psp_stop","_psp_input","_psp_state_size","_psp_save","_psp_load"]' \
+  -sEXPORTED_FUNCTIONS='["_malloc","_free","_psp_start","_psp_step","_psp_pause","_psp_stop","_psp_input","_psp_save_ready"]' \
   --preload-file .retrom-build/web/assets@/system/PPSSPP --no-entry -o .retrom-build/web/ppsspp.js
 
 python3 - <<'PYNOTICE'
