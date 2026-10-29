@@ -2,7 +2,7 @@ import {loadContentReader, contentAbi, contractSha256, verifiedAsset} from './pp
 import {mountDisc} from './ppsspp-disc.mjs';
 import {decodeSave, nativeSaves, saveRoot} from './ppsspp-save.mjs';
 
-let core, contentReader, canvas, timer, saves, paused = true, stopped = false, ready = false, frames = 0;
+let core, contentReader, canvas, timer, saves, paused = true, stopped = false, ready = false, nextTick = 0;
 let commands = Promise.resolve();
 const reply = (id, value, transfer = []) => postMessage({id, value}, transfer);
 const fail = (id, error) => {postMessage({kind: 'diagnostic', message: error.stack || error.message}); postMessage({id, error: error.message || 'PPSSPP_RUNTIME_FAILED'});};
@@ -16,11 +16,11 @@ function loop() {
       if (!paused) {
         const state = core._psp_step();
         if (!state) throw new Error('PPSSPP_CORE_STOPPED');
-        ready = state === 2; frames++;
-        if (frames % 30 === 0) postMessage({kind: 'frames', value: frames});
+        ready = state === 2;
       }
       if (ready) await saves.refresh();
-      timer = setTimeout(loop, paused ? 100 : Math.max(0, 1000 / 60 - (performance.now() - start)));
+      nextTick = paused ? performance.now() : Math.max(nextTick + core.retromFrameInterval, start);
+      timer = setTimeout(loop, paused ? 100 : Math.max(0, nextTick - performance.now()));
     } catch (error) {paused = true; fail(0, error);}
   });
 }
@@ -50,11 +50,11 @@ async function start(value) {
   while (!ready) {
     const state = core._psp_step();
     if (!state || performance.now() >= deadline) throw new Error('PPSSPP_START_FAILED');
-    ready = state === 2; frames++;
+    ready = state === 2;
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   await saves.refresh();
-  paused = false; loop(); return {ready: true};
+  paused = false; nextTick = performance.now(); loop(); return {ready: true};
 }
 async function command(type, value) {
   if (type === 'start') return start(value);
@@ -62,7 +62,7 @@ async function command(type, value) {
   switch (type) {
   case 'input': core._psp_input(value.mask, value.x, value.y); return;
   case 'pause': paused = true; core._psp_pause(); if (ready) await saves.refresh(); return;
-  case 'resume': paused = false; return;
+  case 'resume': paused = false; nextTick = performance.now(); return;
   case 'checkpoint': {
     if (!ready) throw new Error('PPSSPP_CHECKPOINT_NOT_READY');
     return saves.checkpoint();

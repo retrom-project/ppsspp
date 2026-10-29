@@ -24,6 +24,14 @@ retro_hw_render_callback hardware{};
 unsigned buttons = 0;
 int16_t analogX = 0, analogY = 0;
 bool loaded = false, stopped = false;
+unsigned presentedFrames = 0;
+
+EM_JS(void, Timing, (double fps), {
+	Module.retromFrameInterval = 1000 / fps;
+});
+EM_JS(void, Presented, (unsigned count), {
+	postMessage({kind: 'frames', value: count});
+});
 
 void Log(enum retro_log_level level, const char *format, ...) {
 	if (level < RETRO_LOG_WARN) return;
@@ -74,6 +82,7 @@ bool Environment(unsigned command, void *data) {
 	}
 	case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: return *static_cast<retro_pixel_format *>(data) == RETRO_PIXEL_FORMAT_XRGB8888;
 	case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
+		Timing(static_cast<retro_system_av_info *>(data)->timing.fps); return true;
 	case RETRO_ENVIRONMENT_SET_GEOMETRY:
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
 	case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
@@ -89,7 +98,10 @@ EM_JS(void, Audio, (const int16_t *data, size_t frames), {
 });
 size_t AudioBatch(const int16_t *data, size_t frames) { Audio(data, frames); return frames; }
 void AudioSample(int16_t left, int16_t right) { const int16_t data[] = {left, right}; Audio(data, 1); }
-void Video(const void *, unsigned, unsigned, size_t) {}
+void Video(const void *data, unsigned, unsigned, size_t) {
+	// A null callback repeats the previous image; count actual submissions only.
+	if (data) Presented(++presentedFrames);
+}
 void Poll() {}
 int16_t Input(unsigned port, unsigned device, unsigned index, unsigned id) {
 	if (port != 0) return 0;
@@ -135,6 +147,9 @@ EMSCRIPTEN_KEEPALIVE int psp_start(const char *path, const char *mac) {
 	loaded = retro_load_game(&game);
 	if (!loaded || !hardware.context_reset) return 0;
 	hardware.context_reset();
+	retro_system_av_info info{};
+	retro_get_system_av_info(&info);
+	Timing(info.timing.fps);
 	return 1;
 }
 EMSCRIPTEN_KEEPALIVE int psp_step() {

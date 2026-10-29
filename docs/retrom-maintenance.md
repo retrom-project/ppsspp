@@ -51,6 +51,12 @@ wait forever. Native FS mutations proxy to the emulation worker, which copies th
 synchronously before awaiting its digest. Worker ticks and commands share one serialized queue;
 the main-thread availability getter reads only cached status.
 
+Presented-frame counts come from non-null libretro video callbacks and are published on every
+submission, independently of worker tick count. Worker pacing uses the core's AV interval and an
+absolute deadline to avoid accumulating timer rounding error. PCM starts with 100 ms of jitter
+buffering and remains contiguous; bounded playback-rate correction (±2%) absorbs clock drift
+without stopping the playing queue. Only pause, stop and a real underrun restart that queue.
+
 ## Build and test
 
 Install Docker, Node.js and Python 3 as the current user. Initialize pinned Git submodules recursively.
