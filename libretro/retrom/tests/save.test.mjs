@@ -88,6 +88,25 @@ test('checks declared file size against the aggregate limit before reading file 
   await assert.rejects(saves.refresh(), /CHECKPOINT_INVALID/);
   assert.equal(read, false);
 });
+test('captures direct memory-stick saves outside SAVEDATA while excluding emulator-owned files', async () => {
+  const fs = filesystem(), statuses = [];
+  for (const path of ['/save/PSP/SAVEDATA/SLOT/DATA.BIN', '/save/PSP/TITLE_SAVE.sys',
+    '/save/custom/progress.dat', '/save/PSP/SYSTEM/config.ini', '/save/PSP/PPSSPP_STATE/state.ppst', '/save/PSP/NAND/registry']) {
+    fs.FS.mkdirTree(path.slice(0, path.lastIndexOf('/'))); fs.FS.writeFile(path, Uint8Array.of(7));
+  }
+  const saves = await nativeSaves({FS: fs.FS, _psp_save_ready: () => 1},
+    {identity, mac, publish: s => statuses.push(s), crypto: webcrypto});
+  const first = await saves.checkpoint();
+  assert.deepEqual(decodeSave(first, identity).files.map(f => f.path),
+    ['PSP/SAVEDATA/SLOT/DATA.BIN', 'PSP/TITLE_SAVE.sys', 'custom/progress.dat']);
+  await saves.acknowledge(first);
+  fs.FS.writeFile('/save/PSP/SYSTEM/config.ini', Uint8Array.of(8));
+  await saves.refresh(); assert.equal(statuses.at(-1).blocker, 'UNCHANGED');
+  const writer = fs.FS.open('/save/custom/progress.dat', 1);
+  fs.FS.write(writer, Uint8Array.of(8), 0, 1);
+  await saves.refresh(); assert.equal(statuses.at(-1).blocker, 'BUSY');
+  fs.FS.close(writer); await saves.refresh(); assert.equal(statuses.at(-1).available, true);
+});
 test('discovers and exports completed files without waiting for another render frame', async () => {
   const fs = filesystem(), statuses = [];
   const saves = await nativeSaves({FS: fs.FS, _psp_save_ready: synchronize => {

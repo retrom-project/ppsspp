@@ -62,22 +62,25 @@ async function instance() {
 }
 test('native checkpoint restores complete savedata and virtual MAC before boot without loading execution state', async () => {
   const first = await instance(); await first.start();
-  first.write(saveRoot + '/SLOT/DATA.BIN', new Uint8Array([9, 8]));
+  first.write(saveRoot + '/PSP/SAVEDATA/SLOT/DATA.BIN', new Uint8Array([9, 8]));
+  first.write(saveRoot + '/PSP/TITLE_SAVE.sys', new Uint8Array([7, 6]));
   first.write('/save/PSP/SYSTEM/irrelevant.ini', new Uint8Array([1]));
   const saved = await first.command('checkpoint');
   const second = await instance(); await second.start(saved);
-  assert.deepEqual(second.files.get(saveRoot + '/SLOT/DATA.BIN'), new Uint8Array([9, 8]));
+  assert.deepEqual(second.files.get(saveRoot + '/PSP/SAVEDATA/SLOT/DATA.BIN'), new Uint8Array([9, 8]));
+  assert.deepEqual(second.files.get(saveRoot + '/PSP/TITLE_SAVE.sys'), new Uint8Array([7, 6]));
   assert.equal(second.files.has('/save/PSP/SYSTEM/irrelevant.ini'), false);
   const archive = decodeSave(saved, 'a'.repeat(64)), boot = second.calls.find(c => c[0] === 'boot');
   assert.equal(boot[2], archive.mac);
-  assert.equal(boot[3].includes(saveRoot + '/SLOT/DATA.BIN'), true);
+  assert.equal(boot[3].includes(saveRoot + '/PSP/SAVEDATA/SLOT/DATA.BIN'), true);
+  assert.equal(boot[3].includes(saveRoot + '/PSP/TITLE_SAVE.sys'), true);
   await assert.rejects(second.command('checkpoint'), /SAVE_UNAVAILABLE/);
   await second.command('input', {mask: 1 << 8, x: 12, y: 0});
   assert.deepEqual(second.calls.at(-1), ['input', 256, 12, 0]);
   await second.command('stop'); assert.deepEqual(second.calls.slice(-3), [['stop'], ['contentClosed'], ['threadsStopped']]);
 });
 test('invalid/truncated and path-escaping snapshots never boot as a new game', async () => {
-  const first = await instance(); await first.start(); first.write(saveRoot + '/SLOT/DATA.BIN', Uint8Array.of(1));
+  const first = await instance(); await first.start(); first.write(saveRoot + '/PSP/SAVEDATA/SLOT/DATA.BIN', Uint8Array.of(1));
   const saved = await first.command('checkpoint');
   const bad = saved.slice(0, -1); await assert.rejects((await instance()).start(bad), /CHECKPOINT_INVALID/);
   const header = new TextEncoder().encode(JSON.stringify({version: 1, stateSize: 1, files: [{path: '../escape', size: 1}]}));

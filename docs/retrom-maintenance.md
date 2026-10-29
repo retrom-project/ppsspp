@@ -33,8 +33,10 @@ ABI checking, not a second implementation of transport or storage.
 
 `ppsspp-game-save-v1` contains a little-endian uint32 JSON-header length, the UTF-8 header, then
 native file bytes in header order. The header declares version, disc SHA-256, virtual PSP MAC and
-relative file paths/sizes/timestamps. Only the isolated instance's `PSP/SAVEDATA` is included, with
-all slots, metadata and icons. Paths, duplicates, file count (4096), truncation, total size (256 MiB)
+relative memory-stick paths/sizes/timestamps. The isolated instance's `/save` includes all native
+slots, metadata and icons, plus games' direct memory-stick files outside `PSP/SAVEDATA`.
+`PSP/SYSTEM`, `PSP/NAND`, `PSP/PPSSPP_STATE` and `.nomedia` markers are excluded from observation,
+export and restore. Paths, duplicates, file count (4096), truncation, total size (256 MiB)
 and header size (1 MiB) are checked. Files and MAC are restored before boot; no emulator state is
 serialized or loaded. Public gzip is applied exactly once by retrom-runtime.
 

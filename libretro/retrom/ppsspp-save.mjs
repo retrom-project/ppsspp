@@ -1,4 +1,8 @@
-export const saveRoot = '/save/PSP/SAVEDATA';
+export const saveRoot = '/save';
+// Game-owned memory-stick files can live outside PSP/SAVEDATA. Never archive
+// emulator settings, NAND or execution snapshots alongside native game progress.
+const excluded = path => path.split('/').some(part => part.toUpperCase() === '.NOMEDIA') ||
+  /^PSP\/(?:SYSTEM|NAND|PPSSPP_STATE)(?:\/|$)/i.test(path);
 const maximum = 256 * 1024 * 1024, maximumHeader = 1024 * 1024, maximumFiles = 4096;
 const invalid = () => {throw new Error('PPSSPP_CHECKPOINT_INVALID');};
 const validMac = mac => typeof mac === 'string' && /^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$/.test(mac) && mac !== '00:00:00:00:00:00';
@@ -8,7 +12,7 @@ function validate({identity, mac, files}) {
       !Array.isArray(files) || files.length > maximumFiles) invalid();
   const paths = new Set();
   for (const file of files) {
-    if (!file || typeof file.path !== 'string' || file.path === '.nomedia' || file.path.length > 1024 || file.path.split('/').length > 33 ||
+    if (!file || typeof file.path !== 'string' || excluded(file.path) || file.path.length > 1024 || file.path.split('/').length > 33 ||
         file.path.split('/').some(p => !p || p === '.' || p === '..' || /[\\\x00-\x1f]/.test(p)) ||
         !Number.isSafeInteger(file.size) || file.size < 0 || file.size > maximum ||
         !Number.isSafeInteger(file.mtime) || file.mtime < 0) invalid();
@@ -62,7 +66,7 @@ export function decodeSave(bytes, identity) {
 function observe(FS) {
   let generation = 1;
   const writers = new Set(), originals = new Map();
-  const relevant = path => typeof path === 'string' && path.startsWith(saveRoot + '/') && path !== saveRoot + '/.nomedia';
+  const relevant = path => typeof path === 'string' && path.startsWith(saveRoot + '/') && !excluded(path.slice(saveRoot.length + 1));
   for (const method of ['open', 'write', 'close', 'truncate', 'unlink', 'rename', 'mkdir', 'rmdir']) {
     if (typeof FS[method] !== 'function') continue;
     const original = FS[method]; originals.set(method, original);
@@ -87,7 +91,7 @@ function readFiles(FS, path = saveRoot, depth = 0, budget = {entries: 0, files: 
   if (depth > 32) invalid();
   const files = [];
   for (const name of FS.readdir(path).filter(name => name !== '.' && name !== '..').sort()) {
-    if (path === saveRoot && name === '.nomedia') continue;
+    if (excluded((path + '/' + name).slice(saveRoot.length + 1))) continue;
     if (++budget.entries > maximumFiles * 2) invalid();
     const full = path + '/' + name, info = FS.lstat(full);
     if (FS.isDir(info.mode)) files.push(...readFiles(FS, full, depth + 1, budget));
