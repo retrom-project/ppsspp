@@ -53,8 +53,12 @@ the main-thread availability getter reads only cached status.
 
 Presented-frame counts come from non-null libretro video callbacks and are published on every
 submission, independently of worker tick count. Worker pacing uses the core's AV interval and an
-absolute deadline to avoid accumulating timer rounding error. PCM starts with 100 ms of jitter
-buffering and remains contiguous; bounded playback-rate correction (±2%) absorbs clock drift
+absolute deadline to avoid accumulating timer rounding error.
+Each tick enters through a MessageChannel task so short or overdue deadlines do not accumulate
+Chromium's 4 ms minimum for nested timers. Positive deadlines still sleep, and paused polling
+stays at 100 ms; stop cancels the timer and closes both channel ports.
+PCM starts with 100 ms of jitter buffering and remains contiguous; bounded playback-rate
+correction (±2%) absorbs clock drift
 without stopping the playing queue. Only pause, stop and a real underrun restart that queue.
 
 ## Build and test

@@ -6,7 +6,15 @@ let core, contentReader, canvas, timer, saves, paused = true, stopped = false, r
 let commands = Promise.resolve();
 const reply = (id, value, transfer = []) => postMessage({id, value}, transfer);
 const fail = (id, error) => {postMessage({kind: 'diagnostic', message: error.stack || error.message}); postMessage({id, error: error.message || 'PPSSPP_RUNTIME_FAILED'});};
-const stopLoop = () => {clearTimeout(timer); timer = undefined;};
+const ticks = new MessageChannel();
+ticks.port1.onmessage = () => loop();
+const stopLoop = () => {clearTimeout(timer); timer = undefined; ticks.port1.close(); ticks.port2.close();};
+function scheduleLoop(delay) {
+  // Message tasks break timer nesting. Otherwise Chromium adds at least 4 ms
+  // after near-budget or late frames, even when the requested delay is zero.
+  if (delay > 0) timer = setTimeout(() => ticks.port2.postMessage(null), delay);
+  else {timer = undefined; ticks.port2.postMessage(null);}
+}
 function loop() {
   // Ticks and commands share one queue, including async hashing and file exports.
   commands = commands.then(async () => {
@@ -20,7 +28,7 @@ function loop() {
       }
       if (ready) await saves.refresh();
       nextTick = paused ? performance.now() : Math.max(nextTick + core.retromFrameInterval, start);
-      timer = setTimeout(loop, paused ? 100 : Math.max(0, nextTick - performance.now()));
+      scheduleLoop(paused ? 100 : Math.max(0, nextTick - performance.now()));
     } catch (error) {paused = true; fail(0, error);}
   });
 }
