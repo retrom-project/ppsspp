@@ -43,9 +43,11 @@ after durable persistence. Identical content has one revision, independent of na
 or timestamps. No progress means no initial checkpoint; deletion of existing progress can export
 an empty file set. FS mutation observation covers direct sceIo write/truncate/rename/delete as
 well as utility savedata. Writable handles and SaveIO/AsyncIO completion block partial exports.
-The native readiness check pauses emulation while preserving held input and reports pending IO
-without joining threads that may need JS filesystem proxying. Worker ticks and commands share
-one serialized queue; the main-thread availability getter reads only cached status.
+The native readiness check only reports pending IO. It never pauses emulation or drains a render
+frame: the emulation thread can stop before producing another frame, making a synchronous drain
+wait forever. Native FS mutations proxy to the emulation worker, which copies the complete tree
+synchronously before awaiting its digest. Worker ticks and commands share one serialized queue;
+the main-thread availability getter reads only cached status.
 
 ## Build and test
 

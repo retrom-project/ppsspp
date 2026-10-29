@@ -88,6 +88,21 @@ test('checks declared file size against the aggregate limit before reading file 
   await assert.rejects(saves.refresh(), /CHECKPOINT_INVALID/);
   assert.equal(read, false);
 });
+test('discovers and exports completed files without waiting for another render frame', async () => {
+  const fs = filesystem(), statuses = [];
+  const saves = await nativeSaves({FS: fs.FS, _psp_save_ready: synchronize => {
+    if (synchronize) throw new Error('render queue has no next frame while emulation is paused');
+    return 1;
+  }}, {identity, mac, publish: status => statuses.push(status), crypto: webcrypto});
+  await saves.refresh();
+  assert.equal(statuses.at(-1).blocker, 'NO_SAVE');
+  fs.FS.mkdirTree(saveRoot + '/SLOT');
+  fs.FS.writeFile(saveRoot + '/SLOT/DATA.BIN', Uint8Array.of(9));
+  const checkpoint = await saves.checkpoint();
+  assert.deepEqual(decodeSave(checkpoint, identity).files[0].bytes, Uint8Array.of(9));
+  await saves.acknowledge(checkpoint);
+  assert.equal(statuses.at(-1).blocker, 'UNCHANGED');
+});
 test('native IO is busy before its first file mutation and clears without a false revision', async () => {
   const fs = filesystem(), statuses = [];
   let ready = true;

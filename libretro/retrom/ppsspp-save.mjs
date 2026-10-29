@@ -118,9 +118,10 @@ export async function nativeSaves(core, {identity, mac, restore, publish, crypto
   };
   const refresh = async () => {
     // Utility IO can begin before opening a file. Check that independently of FS dirtiness.
-    if (observed.busy() || !core._psp_save_ready(0)) {status('BUSY'); return;}
+    if (observed.busy() || !core._psp_save_ready()) {status('BUSY'); return;}
     if (observed.generation() === scanned) {status(!snapshot ? 'NO_SAVE' : revision === baseline ? 'UNCHANGED' : null); return;}
-    if (!core._psp_save_ready(1)) {status('BUSY'); return;}
+    // Pthread FS mutations proxy to this worker. Copy the tree synchronously before
+    // awaiting its digest; no emulation pause or render-frame drain is required.
     const generation = observed.generation(), files = readFiles(core.FS);
     if (!files.length && !hadSave) {scanned = generation; status('NO_SAVE'); return;}
     const save = {identity, mac, files}, next = await signature(save);
@@ -131,7 +132,7 @@ export async function nativeSaves(core, {identity, mac, restore, publish, crypto
     refresh, dispose: observed.dispose,
     async checkpoint() {
       // Even an already cached complete revision must wait for a newer in-flight write.
-      if (observed.busy() || !core._psp_save_ready(1)) throw new Error('PPSSPP_SAVE_BUSY');
+      if (observed.busy() || !core._psp_save_ready()) throw new Error('PPSSPP_SAVE_BUSY');
       await refresh();
       if (!snapshot || revision === baseline) throw new Error('PPSSPP_SAVE_UNAVAILABLE');
       return snapshot.slice();

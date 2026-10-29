@@ -148,11 +148,10 @@ EMSCRIPTEN_KEEPALIVE void psp_pause() {
 	buttons = 0; analogX = analogY = 0;
 	if (loaded && Libretro::useEmuThread) Libretro::EmuThreadPause();
 }
-EMSCRIPTEN_KEEPALIVE int psp_save_ready(int synchronize) {
+EMSCRIPTEN_KEEPALIVE int psp_save_ready() {
 	if (!loaded || !retro_retrom_state_ready()) return 0;
-	// Preserve held input. Native IO may proxy work to this JS worker, so report busy
-	// and let its event loop run rather than blocking in SaveToRam/SyncThread/join.
-	if (synchronize && Libretro::useEmuThread) Libretro::EmuThreadPause();
+	// FS operations and snapshot copies are serialized on the JS worker. Never drain
+	// a render frame here: the emulation thread may pause before producing another.
 	return !__UtilityHasPendingSavedataIO() && !__IoHasPendingOperations();
 }
 EMSCRIPTEN_KEEPALIVE void psp_stop() {
