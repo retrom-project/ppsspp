@@ -23,6 +23,9 @@ class KernelObject;
 void __IoInit();
 void __IoDoState(PointerWrap &p);
 void __IoShutdown();
+#if defined(__EMSCRIPTEN__)
+bool __IoHasPendingOperations();
+#endif
 void __IoVblank();
 
 struct ScePspDateTime;

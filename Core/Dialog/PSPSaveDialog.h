@@ -19,6 +19,9 @@
 
 #include <thread>
 #include <mutex>
+#if defined(__EMSCRIPTEN__)
+#include <atomic>
+#endif
 
 #include "Core/Dialog/PSPDialog.h"
 #include "Core/Dialog/SavedataParam.h"
@@ -35,6 +38,9 @@ public:
 	pspUtilityDialogCommon *GetCommonParam() override;
 
 	void ExecuteIOAction();
+#if defined(__EMSCRIPTEN__)
+	bool HasPendingIO() const { return retromIOPending_.load(std::memory_order_acquire); }
+#endif
 
 protected:
 	bool UseAutoStatus() override {
@@ -104,6 +110,10 @@ private:
 	std::thread ioThread;
 	std::mutex paramLock;
 	volatile SaveIOStatus ioThreadStatus = SAVEIO_NONE;
+#if defined(__EMSCRIPTEN__)
+	// Browser export observes completion without joining a thread that may proxy FS work.
+	std::atomic<bool> retromIOPending_{false};
+#endif
 };
 
 void ResetSecondsSinceLastGameSave();

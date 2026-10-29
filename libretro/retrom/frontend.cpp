@@ -9,8 +9,8 @@
 #include <emscripten/html5.h>
 #include "libretro.h"
 #include "Core/System.h"
-#include "Core/SaveState.h"
-#include "Common/Serialize/Serializer.h"
+#include "Core/HLE/sceIo.h"
+#include "Core/HLE/sceUtility.h"
 #include "libretro/LibretroGraphicsContext.h"
 
 extern "C" bool retro_retrom_state_ready();
@@ -24,8 +24,14 @@ retro_hw_render_callback hardware{};
 unsigned buttons = 0;
 int16_t analogX = 0, analogY = 0;
 bool loaded = false, stopped = false;
-std::vector<u8> pendingState;
-constexpr size_t MAX_STATE = 256 * 1024 * 1024;
+unsigned presentedFrames = 0;
+
+EM_JS(void, Timing, (double fps), {
+	Module.retromFrameInterval = 1000 / fps;
+});
+EM_JS(void, Presented, (unsigned count), {
+	postMessage({kind: 'frames', value: count});
+});
 
 void Log(enum retro_log_level level, const char *format, ...) {
 	if (level < RETRO_LOG_WARN) return;
@@ -76,6 +82,7 @@ bool Environment(unsigned command, void *data) {
 	}
 	case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: return *static_cast<retro_pixel_format *>(data) == RETRO_PIXEL_FORMAT_XRGB8888;
 	case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
+		Timing(static_cast<retro_system_av_info *>(data)->timing.fps); return true;
 	case RETRO_ENVIRONMENT_SET_GEOMETRY:
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
 	case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
@@ -91,7 +98,10 @@ EM_JS(void, Audio, (const int16_t *data, size_t frames), {
 });
 size_t AudioBatch(const int16_t *data, size_t frames) { Audio(data, frames); return frames; }
 void AudioSample(int16_t left, int16_t right) { const int16_t data[] = {left, right}; Audio(data, 1); }
-void Video(const void *, unsigned, unsigned, size_t) {}
+void Video(const void *data, unsigned, unsigned, size_t) {
+	// A null callback repeats the previous image; count actual submissions only.
+	if (data) Presented(++presentedFrames);
+}
 void Poll() {}
 int16_t Input(unsigned port, unsigned device, unsigned index, unsigned id) {
 	if (port != 0) return 0;
@@ -102,8 +112,15 @@ int16_t Input(unsigned port, unsigned device, unsigned index, unsigned id) {
 }
 
 extern "C" {
-EMSCRIPTEN_KEEPALIVE int psp_start(const char *path) {
-	if (loaded) return 0;
+EMSCRIPTEN_KEEPALIVE int psp_start(const char *path, const char *mac) {
+	if (loaded || !mac || strlen(mac) != 17) return 0;
+	for (int i = 0; i < 12; ++i) {
+		char digit = mac[i + i / 2];
+		if (!((digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f'))) return 0;
+		char key[64];
+		snprintf(key, sizeof(key), "ppsspp_change_mac_address%02d", i + 1);
+		options[key] = std::string(1, digit);
+	}
 	InstallCanvas();
 	EmscriptenWebGLContextAttributes attrs;
 	emscripten_webgl_init_context_attributes(&attrs);
@@ -130,6 +147,9 @@ EMSCRIPTEN_KEEPALIVE int psp_start(const char *path) {
 	loaded = retro_load_game(&game);
 	if (!loaded || !hardware.context_reset) return 0;
 	hardware.context_reset();
+	retro_system_av_info info{};
+	retro_get_system_av_info(&info);
+	Timing(info.timing.fps);
 	return 1;
 }
 EMSCRIPTEN_KEEPALIVE int psp_step() {
@@ -143,32 +163,11 @@ EMSCRIPTEN_KEEPALIVE void psp_pause() {
 	buttons = 0; analogX = analogY = 0;
 	if (loaded && Libretro::useEmuThread) Libretro::EmuThreadPause();
 }
-EMSCRIPTEN_KEEPALIVE size_t psp_state_size() {
+EMSCRIPTEN_KEEPALIVE int psp_save_ready() {
 	if (!loaded || !retro_retrom_state_ready()) return 0;
-	psp_pause();
-	pendingState.clear();
-	if (SaveState::SaveToRam(pendingState) != CChunkFileReader::ERROR_NONE || pendingState.size() > MAX_STATE) {
-		pendingState.clear();
-		return 0;
-	}
-	return pendingState.size();
-}
-EMSCRIPTEN_KEEPALIVE int psp_save(uint8_t *data, size_t size) {
-	if (!data || !size || size != pendingState.size()) {
-		return 0;
-	}
-	memcpy(data, pendingState.data(), size);
-	std::vector<u8>().swap(pendingState);
-	return 1;
-}
-EMSCRIPTEN_KEEPALIVE int psp_load(uint8_t *data, size_t size) {
-	if (!data || !size || size > MAX_STATE || !loaded || !retro_retrom_state_ready()) {
-		return 0;
-	}
-	psp_pause();
-	std::vector<u8> state(data, data + size);
-	std::string error;
-	return SaveState::LoadFromRam(state, &error) == CChunkFileReader::ERROR_NONE;
+	// FS operations and snapshot copies are serialized on the JS worker. Never drain
+	// a render frame here: the emulation thread may pause before producing another.
+	return !__UtilityHasPendingSavedataIO() && !__IoHasPendingOperations();
 }
 EMSCRIPTEN_KEEPALIVE void psp_stop() {
 	if (!loaded) return;
@@ -177,6 +176,5 @@ EMSCRIPTEN_KEEPALIVE void psp_stop() {
 	retro_unload_game();
 	retro_deinit();
 	loaded = false;
-	std::vector<u8>().swap(pendingState);
 }
 }

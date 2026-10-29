@@ -27,6 +27,19 @@
 #include "Core/HW/AsyncIOManager.h"
 #include "Core/FileSystems/MetaFileSystem.h"
 
+#if defined(__EMSCRIPTEN__)
+bool AsyncIOManager::HasPendingOperations() {
+	std::lock_guard<std::mutex> guard(resultsLock_);
+	// A dequeued operation may still be writing. Completed but unconsumed results are safe.
+	for (u32 handle : resultsPending_) {
+		if (results_.find(handle) == results_.end()) {
+			return true;
+		}
+	}
+	return false;
+}
+#endif
+
 bool AsyncIOManager::HasOperation(u32 handle) {
 	std::lock_guard<std::mutex> guard(resultsLock_);
 	if (resultsPending_.find(handle) != resultsPending_.end()) {

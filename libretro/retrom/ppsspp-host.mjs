@@ -17,6 +17,7 @@ export async function createPPSSPPHost({target, source, restore, onFailure, sign
   } catch (error) {worker?.terminate(); canvas.remove(); throw error;}
   const pending = new Map();
   let sequence = 0, stopped = false, frames = 0, contentReady = false, stopPromise;
+  let saveStatus = {available: false, blocker: 'NOT_READY'};
   const rejectAll = error => {for (const item of pending.values()) {win.clearTimeout(item.timer); item.reject(error);} pending.clear();};
   const fatal = error => {rejectAll(error); if (!stopped) {onFailure(error); void stop();}};
   worker.onerror = () => fatal(new Error('PPSSPP_WORKER_FAILED'));
@@ -27,6 +28,7 @@ export async function createPPSSPPHost({target, source, restore, onFailure, sign
     }
     if (data.kind === 'audio') {audio.push(data.samples); return;}
     if (data.kind === 'frames') {frames = data.value; return;}
+    if (data.kind === 'save-status') {saveStatus = data.value; return;}
     if (data.kind === 'diagnostic') {console.warn('PPSSPP:', data.message); return;}
     if (data.id === 0 && data.error) {fatal(new Error(data.error)); return;}
     const item = pending.get(data.id);
@@ -63,6 +65,8 @@ export async function createPPSSPPHost({target, source, restore, onFailure, sign
   return {
     canvas, frameCount: () => frames, stop,
     checkpoint: () => call('checkpoint'), screenshot: () => call('screenshot'),
+    getCheckpointAvailability: () => stopped ? {available: false, blocker: 'NOT_READY'} : {...saveStatus},
+    acknowledgeCheckpoint: bytes => call('acknowledge', bytes),
     async pause() {input.pause(true); await call('pause'); await audio.pause(true);},
     async resume() {await audio.pause(false); await call('resume'); input.pause(false);},
     setVolume: value => audio.volume(value),

@@ -31,13 +31,44 @@ the reader closes. Forced Provider shutdown revokes the shared slot and wakes bl
 Contract/schema/error-number files in `libretro/retrom/content-io-v1` are immutable mirrors for
 ABI checking, not a second implementation of transport or storage.
 
-`ppsspp-state-v1` contains a little-endian uint32 JSON-header length, the UTF-8 header, complete
-native state, then memory-stick files in header order. The header declares version, stateSize and
-relative file paths/sizes. Paths, truncation, total size (256 MiB) and header size (1 MiB) are checked.
-Memory-stick files are restored before boot; native state is restored only after the boot transition
-finishes on the emulation frontend. Public gzip is applied exactly once by retrom-runtime.
-EmulatorJS state formats are not declared compatible. Future upstream updates require a real
-cross-version state test before retaining this format as readable.
+`ppsspp-game-save-v1` contains a little-endian uint32 JSON-header length, the UTF-8 header, then
+native file bytes in header order. The header declares version, disc SHA-256, virtual PSP MAC and
+relative memory-stick paths/sizes/timestamps. The isolated instance's `/save` includes all native
+slots, metadata and icons, plus games' direct memory-stick files outside `PSP/SAVEDATA`.
+`PSP/SYSTEM`, `PSP/NAND`, `PSP/PPSSPP_STATE` and `.nomedia` markers are excluded from observation,
+export and restore. Paths, duplicates, file count (4096), truncation, total size (256 MiB)
+and header size (1 MiB) are checked. Files and MAC are restored before boot; no emulator state is
+serialized or loaded. Public gzip is applied exactly once by retrom-runtime.
+
+The host exposes native checkpoint availability and acknowledges only the exact exported bytes
+after durable persistence. Identical content has one revision, independent of native write count
+or timestamps. No progress means no initial checkpoint; deletion of existing progress can export
+an empty file set. FS mutation observation covers direct sceIo write/truncate/rename/delete as
+well as utility savedata. Writable handles and SaveIO/AsyncIO completion block partial exports.
+The native readiness check only reports pending IO. It never pauses emulation or drains a render
+frame: the emulation thread can stop before producing another frame, making a synchronous drain
+wait forever. Native FS mutations proxy to the emulation worker, which copies the complete tree
+synchronously before awaiting its digest. Worker ticks and commands share one serialized queue;
+the main-thread availability getter reads only cached status.
+
+Presented-frame counts come from non-null libretro video callbacks and are published on every
+submission, independently of worker tick count. Worker pacing uses the core's AV interval and an
+absolute deadline to avoid accumulating timer rounding error.
+Each tick enters through a MessageChannel task so short or overdue deadlines do not accumulate
+Chromium's 4 ms minimum for nested timers. Positive deadlines still sleep, and paused polling
+stays at 100 ms; stop cancels the timer and closes both channel ports.
+PCM starts with 100 ms of jitter buffering and remains contiguous; bounded playback-rate
+correction (±2%) absorbs clock drift
+without stopping the playing queue. Only pause, stop and a real underrun restart that queue.
+
+Keyboard controls map to physical PSP buttons: X is Cross, Z is Circle, Enter is Start,
+and right Shift is Select. The game decides which button confirms; Start is not a universal
+confirmation key. Focus the game canvas before sending keyboard input.
+
+Measure normal gameplay without an attached browser debugger. Opening DevTools can replace
+optimized Wasm with debugging code and reduce both emulation speed and PCM supply.
+Performance recording can enable optimized code again, so record the debugger/profiler state
+alongside measurements. See the [V8 compilation pipeline](https://v8.dev/docs/wasm-compilation-pipeline).
 
 ## Build and test
 
@@ -64,7 +95,7 @@ commit, dirty state, recursive source-tree hash, ABI and each output hash. Candi
 uncommitted work; release.py rejects dirty source. Run the upstream native unit and tests_good
 software-renderer suites as documented in `docs/building.md`. Run the Retrom `ACC-PSP-001`
 product case with legally supplied fixtures: import, review preview, product launch, standard gamepad
-direction/confirm, audio, pause, instant checkpoint, different-launch restore, continued input,
+direction/confirm, audio, pause, in-game save, native export, different-launch in-game load, continued input,
 persistent content reuse and exit. Keep ROMs and generated evidence out of source control.
 
 ## Maintenance and release

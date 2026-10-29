@@ -351,6 +351,12 @@ int GetPSPLanguage() {
 	}
 }
 
+#if defined(__EMSCRIPTEN__)
+bool __UtilityHasPendingSavedataIO() {
+	return saveDialog && saveDialog->HasPendingIO();
+}
+#endif
+
 void __UtilityInit() {
 	saveDialog = new PSPSaveDialog(UtilityDialogType::SAVEDATA);
 	msgDialog = new PSPMsgDialog(UtilityDialogType::MSG);

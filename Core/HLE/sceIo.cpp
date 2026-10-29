@@ -138,6 +138,11 @@ static MemStickState lastMemStickState;
 static MemStickFatState lastMemStickFatState;
 
 static AsyncIOManager ioManager;
+#if defined(__EMSCRIPTEN__)
+bool __IoHasPendingOperations() {
+	return ioManager.HasPendingOperations();
+}
+#endif
 static bool ioManagerThreadEnabled = false;
 static std::thread ioManagerThread;
 

@@ -1161,6 +1161,9 @@ void PSPSaveDialog::ExecuteIOAction() {
 
 	ioThreadStatus = SAVEIO_DONE;
 	param.ClearSFOCache();
+#if defined(__EMSCRIPTEN__)
+	retromIOPending_.store(false, std::memory_order_release);
+#endif
 }
 
 void PSPSaveDialog::ExecuteNotVisibleIOAction() {
@@ -1275,6 +1278,9 @@ void PSPSaveDialog::StartIOThread() {
 	}
 
 	ioThreadStatus = SAVEIO_PENDING;
+#if defined(__EMSCRIPTEN__)
+	retromIOPending_.store(true, std::memory_order_release);
+#endif
 	ioThread = std::thread([this]() {
 		SetCurrentThreadName("SaveIO");
 
