@@ -61,6 +61,15 @@ PCM starts with 100 ms of jitter buffering and remains contiguous; bounded playb
 correction (±2%) absorbs clock drift
 without stopping the playing queue. Only pause, stop and a real underrun restart that queue.
 
+Keyboard controls map to physical PSP buttons: X is Cross, Z is Circle, Enter is Start,
+and right Shift is Select. The game decides which button confirms; Start is not a universal
+confirmation key. Focus the game canvas before sending keyboard input.
+
+Measure normal gameplay without an attached browser debugger. Opening DevTools can replace
+optimized Wasm with debugging code and reduce both emulation speed and PCM supply.
+Performance recording can enable optimized code again, so record the debugger/profiler state
+alongside measurements. See the [V8 compilation pipeline](https://v8.dev/docs/wasm-compilation-pipeline).
+
 ## Build and test
 
 Install Docker, Node.js and Python 3 as the current user. Initialize pinned Git submodules recursively.
