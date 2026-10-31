@@ -11,6 +11,9 @@ WebGL2 in a dedicated worker with OffscreenCanvas. Native helper threads use Ems
 The small frontend implements libretro environment, input, audio and lifecycle callbacks; no
 EmulatorJS or RetroArch frontend is loaded. WebGL2, cross-origin isolation, SharedArrayBuffer,
 OffscreenCanvas and worker modules are required. PSP networking is disabled in this integration.
+MediaEngine video decoding uses two FFmpeg codec threads in browser builds. Automatic CPU-based
+thread counts can exhaust the fixed pthread pool shared with emulation, IO and utility workers,
+causing H.264 initialization to fail before producing a frame.
 
 The host ABI is `ppsspp-host-v4`, with `content-io-v1` and the exact runtime contract hash.
 The host accepts disc SHA-256/size metadata and a role-limited consumer port/SAB, never a game URL.
