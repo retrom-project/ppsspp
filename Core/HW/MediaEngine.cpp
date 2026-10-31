@@ -553,8 +553,13 @@ bool MediaEngine::setVideoStream(int streamNum, bool force) {
 		m_pCodecCtx->flags |= AV_CODEC_FLAG_OUTPUT_CORRUPT | AV_CODEC_FLAG_LOW_DELAY;
 
 		AVDictionary *opt = nullptr;
-		// Allow ffmpeg to use any number of threads it wants.  Without this, it doesn't use threads.
+		// Browser pthreads share a fixed pool with emulation and IO workers.
+		// FFmpeg's automatic CPU-based count can exhaust it before a codec opens.
+#if defined(__EMSCRIPTEN__)
+		av_dict_set(&opt, "threads", "2", 0);
+#else
 		av_dict_set(&opt, "threads", "0", 0);
+#endif
 		int openResult = avcodec_open2(m_pCodecCtx, pCodec, &opt);
 		av_dict_free(&opt);
 		if (openResult < 0) {
