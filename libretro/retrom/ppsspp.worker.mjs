@@ -1,5 +1,6 @@
 import {loadContentReader, contentAbi, contractSha256, verifiedAsset} from './ppsspp-content.mjs';
 import {mountDisc} from './ppsspp-disc.mjs';
+import {mountProject} from './ppsspp-project.mjs';
 import {decodeSave, nativeSaves, saveRoot} from './ppsspp-save.mjs';
 
 let core, contentReader, canvas, timer, saves, paused = true, stopped = false, ready = false, nextTick = 0;
@@ -52,7 +53,8 @@ async function start(value) {
   }
   saves = await nativeSaves(core, {identity: value.source.sha256, mac, restore: restored,
     publish: value => postMessage({kind: 'save-status', value})});
-  const path = mountDisc(core.FS, value.source, contentReader);
+  const path = value.projectEntryPath ? mountProject(core.FS, value.source, contentReader, value.projectEntryPath)
+    : mountDisc(core.FS, value.source, contentReader);
   if (!core.ccall('psp_start', 'number', ['string', 'string'], [path, mac])) throw new Error('PPSSPP_START_FAILED');
   const deadline = performance.now() + 45000;
   while (!ready) {

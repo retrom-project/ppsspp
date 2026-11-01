@@ -52,7 +52,9 @@ bool MemArena::NeedsProbing() {
 }
 
 bool MemArena::GrabMemSpace(size_t size) {
-#ifndef NO_MMAP
+#ifdef NO_MMAP
+	heapSize_ = size;
+#else
 	constexpr mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 
 	// Try a few times in case multiple instances are started near each other.
@@ -108,7 +110,11 @@ bool MemArena::GrabMemSpace(size_t size) {
 }
 
 void MemArena::ReleaseSpace() {
-#ifndef NO_MMAP
+#ifdef NO_MMAP
+	std::free(heapBase_);
+	heapBase_ = nullptr;
+	heapSize_ = 0;
+#else
 	close(fd);
 #endif
 }
@@ -116,7 +122,12 @@ void MemArena::ReleaseSpace() {
 void *MemArena::CreateView(s64 offset, size_t size, void *base)
 {
 #ifdef NO_MMAP
-    return (void*) base;
+	const uintptr_t start = reinterpret_cast<uintptr_t>(base);
+	const uintptr_t reserved = reinterpret_cast<uintptr_t>(heapBase_);
+	if (!heapBase_ || start < reserved || start - reserved > heapSize_ || size > heapSize_ - (start - reserved)) {
+		return nullptr;
+	}
+	return base;
 #else
 	void *retval = mmap(base, size, PROT_READ | PROT_WRITE, MAP_SHARED |
 // Do not sync memory to underlying file. Linux has this by default.
@@ -162,8 +173,8 @@ u8* MemArena::Find4GBBase() {
 		return hardcoded_ptr;
 	}
 #elif defined(NO_MMAP)
-    void* base = std::malloc(0x0A000000);
-    return static_cast<u8*>(base);
+	heapBase_ = static_cast<u8 *>(std::malloc(heapSize_));
+	return heapBase_;
 #else
 	size_t size = 0x10000000;
 	void* base = mmap(0, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED | MAP_NORESERVE, -1, 0);

@@ -92,6 +92,7 @@ function readFiles(FS, path = saveRoot, depth = 0, budget = {entries: 0, files: 
   const files = [];
   for (const name of FS.readdir(path).filter(name => name !== '.' && name !== '..').sort()) {
     if (excluded((path + '/' + name).slice(saveRoot.length + 1))) continue;
+    if (FS.lookupPath?.(path + '/' + name).node.retromImmutable) continue;
     if (++budget.entries > maximumFiles * 2) invalid();
     const full = path + '/' + name, info = FS.lstat(full);
     if (FS.isDir(info.mode)) files.push(...readFiles(FS, full, depth + 1, budget));

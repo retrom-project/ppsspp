@@ -24,6 +24,19 @@ function filesystem() {
   };
   return {FS, files, reads: () => reads};
 }
+test('immutable project assets are excluded while changed companion progress survives a fresh save instance', async () => {
+  const fs = filesystem(), base = saveRoot + '/PSP/GAME/content/';
+  fs.FS.mkdirTree(base.slice(0, -1));
+  fs.files.set(base + 'assets.bin', new Uint8Array([1,2]));
+  fs.files.set(base + 'progress.bin', new Uint8Array([3]));
+  fs.FS.lookupPath = path => ({node: {retromImmutable: path.endsWith('assets.bin')}});
+  const saves = await nativeSaves({FS:fs.FS, _psp_save_ready:()=>1}, {identity,mac,publish(){},crypto:webcrypto});
+  await saves.refresh();
+  const payload = await saves.checkpoint(), restored = decodeSave(payload,identity);
+  assert.deepEqual(restored.files.map(f=>f.path), ['PSP/GAME/content/progress.bin']);
+  assert.deepEqual([...restored.files[0].bytes], [3]);
+  saves.dispose();
+});
 test('native archive preserves complete multi-slot bytes and virtual identity without execution state', () => {
   const original = save([{path: 'SLOT1/PARAM.SFO', bytes: Uint8Array.of(1, 2), mtime: 1000},
     {path: 'SLOT2/DATA.BIN', bytes: Uint8Array.of(3, 4, 5), mtime: 2000}]);

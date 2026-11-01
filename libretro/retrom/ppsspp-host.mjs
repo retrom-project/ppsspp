@@ -4,7 +4,7 @@ import {contentAbi, contractSha256, validateContent, verifiedAsset} from './ppss
 export {contentAbi, contractSha256};
 
 export const abi = 'ppsspp-host-v4';
-export async function createPPSSPPHost({target, source, restore, onFailure, signal, content, assets}) {
+export async function createPPSSPPHost({target, source, restore, onFailure, signal, content, assets, projectEntryPath}) {
   signal?.throwIfAborted();
   validateContent(source, content);
   const win = target.ownerDocument.defaultView;
@@ -56,7 +56,7 @@ export async function createPPSSPPHost({target, source, restore, onFailure, sign
   try {
     signal?.throwIfAborted(); signal?.addEventListener('abort', abort, {once: true});
     const surface = canvas.transferControlToOffscreen();
-    await call('start', {canvas: surface, source, content, restore, assets}, [surface, content.port]);
+    await call('start', {canvas: surface, source, content, restore, assets, projectEntryPath}, [surface, content.port]);
     if (!contentReady) throw Error('CONTENT_IO_ABI_MISMATCH');
     signal?.throwIfAborted();
     input = installInput(win, value => {if (!stopped) worker.postMessage({id: -1, type: 'input', value});});
