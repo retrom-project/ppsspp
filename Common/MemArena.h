@@ -46,6 +46,10 @@ public:
 	bool NeedsProbing();
 
 private:
+#ifdef NO_MMAP
+	u8 *heapBase_ = nullptr;
+	size_t heapSize_ = 0;
+#endif
 #ifdef _WIN32
 	HANDLE hMemoryMapping;
 	SYSTEM_INFO sysInfo;

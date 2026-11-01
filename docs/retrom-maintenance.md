@@ -34,6 +34,18 @@ the reader closes. Forced Provider shutdown revokes the shared slot and wakes bl
 Contract/schema/error-number files in `libretro/retrom/content-io-v1` are immutable mirrors for
 ABI checking, not a second implementation of transport or storage.
 
+Browser memory reservation covers the highest enabled masked view address plus
+its complete size, including gaps. The no-mmap arena owns and frees that complete
+span and rejects views outside it; larger PSP memory layouts must not overwrite
+the native heap.
+
+Multi-file PBP projects use the same single bounded reader over a STORE ZIP.
+The explicit `projectEntryPath` selects the PBP; validated member intervals mount
+below `/save/PSP/GAME/content`. Unchanged mounted resources are omitted from native
+save exports. Writes create ordinary memory-stick overlays, and restored progress
+takes precedence over supplied initial files. No full-project JS allocation is
+needed at startup.
+
 `ppsspp-game-save-v1` contains a little-endian uint32 JSON-header length, the UTF-8 header, then
 native file bytes in header order. The header declares version, disc SHA-256, virtual PSP MAC and
 relative memory-stick paths/sizes/timestamps. The isolated instance's `/save` includes all native

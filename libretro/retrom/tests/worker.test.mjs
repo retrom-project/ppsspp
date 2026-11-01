@@ -73,6 +73,8 @@ async function instance({stepMs = 0, virtualTime = false} = {}) {
     this.setExport('verifiedAsset', verifiedAsset);
   }, {context}) : specifier.includes('disc') ? new vm.SyntheticModule(['mountDisc'], function () {
     this.setExport('mountDisc', () => '/game/content.iso');
+  }, {context}) : specifier.includes('project') ? new vm.SyntheticModule(['mountProject'], function () {
+    this.setExport('mountProject', () => '/save/PSP/GAME/content/launcher.pbp');
   }, {context}) : new vm.SyntheticModule(['default'], function () {this.setExport('default', async () => core);}, {context}));
   await module.evaluate();
   async function command(type, value) {

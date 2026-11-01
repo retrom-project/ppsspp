@@ -228,8 +228,15 @@ bool MemoryMap_Setup(MemMapSetupFlags flags) {
 			continue;
 		if (SkipView(flags, views[i].flags))
 			continue;
-		if (!CanIgnoreView(views[i]))
+		if (!CanIgnoreView(views[i])) {
+#ifdef NO_MMAP
+			// Without virtual mappings, gaps and the complete RAM view must belong to
+			// the allocation too. Summing physical pages does not reserve their addresses.
+			total_mem = std::max(total_mem, size_t(views[i].virtual_address & MEMVIEW32_MASK) + views[i].size);
+#else
 			total_mem += g_arena.roundup(views[i].size);
+#endif
+		}
 	}
 
 	// Grab some pagefile backed memory out of the void ...
